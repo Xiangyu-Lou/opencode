@@ -10,7 +10,8 @@ import { cleanStages } from "./cli-stages"
 import { keptStages, serviceVersion, shouldRetryEnsure } from "./cli-version"
 import { DesktopCli } from "./desktop-cli"
 import { SidecarCredentials } from "./sidecar-credentials"
-import { serverEnv, serverPort, serviceFile } from "./shiyou-server"
+import hideOpenCodePlugin from "./shiyou-hide-opencode.plugin.js?raw"
+import { hideOpenCodePluginFile, serverEnv, serverPort, serviceFile } from "./shiyou-server"
 import { takeSidecarProbe } from "./sidecar-probe"
 
 export * as BackgroundService from "./background-service"
@@ -116,9 +117,26 @@ const prepare = Effect.fn("BackgroundService.prepare")(function* (mode: Backgrou
   const userData = app.getPath("userData")
   const file = serviceFile(userData)
   const env = serverEnv(userData)
+  yield* installHideOpenCodePlugin(userData)
 
   return { cli, client, env, file, isolated, version }
 })
+
+// shiyou: keeps the server's copy of the plugin that turns off OpenCode's sign-in and models current. A failure is
+// logged and the server still starts.
+const installHideOpenCodePlugin = Effect.fn("BackgroundService.installHideOpenCodePlugin")(
+  function* (userData: string) {
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const target = hideOpenCodePluginFile(userData)
+    const current = yield* fs.readFileString(target).pipe(Effect.orElseSucceed(() => undefined))
+
+    if (current === hideOpenCodePlugin) return
+    yield* fs.makeDirectory(path.dirname(target), { recursive: true })
+    yield* fs.writeFileString(target, hideOpenCodePlugin)
+  },
+  Effect.catch((error) => Effect.logError("failed to install the plugin that hides OpenCode services", { error })),
+)
 
 const adopt = Effect.fn("BackgroundService.adopt")(function* (
   setup: Effect.Success<ReturnType<typeof prepare>>,

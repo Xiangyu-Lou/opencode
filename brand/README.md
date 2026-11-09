@@ -30,6 +30,21 @@ comment wherever it touches an upstream file.
 - The updater plugin, which installs official OpenCode releases from opencode.ai.
 - The Install CLI menu item, which writes `~/.opencode/bin/opencode`, where an installed OpenCode CLI lives.
 
+## OpenCode's own services are off
+
+shiyou turns off OpenCode's own sign-in and models: the OpenCode Console and OpenCode Go sign-ins, OpenCode Zen with
+its free models ("OpenCode Free"), and the providers a Console workspace adds. Their code stays in place, so upstream
+syncs stay easy.
+
+- `packages/desktop/src/main/service/shiyou-hide-opencode.plugin.js` is a plugin for shiyou's own server. The desktop
+  copies it into `<app data>/server/config/opencode/plugins/` each time it starts the server, and it removes those
+  integrations and providers, so no list in the client shows them and the server never falls back to a free OpenCode
+  model. It shows up in the server's plugin list as `shiyou.hide-opencode`.
+- The client hides what the server can't: the empty "Free models provided by OpenCode" heading
+  (`providers/models/unpaid.tsx`), the "View usage" command for OpenCode Go and Console budgets
+  (`composer/commands.tsx`), and the connect command's description that names OpenCode Go and Console
+  (`SERVICE_KEYS` in `packages/app/src/brand/i18n.ts`).
+
 ## Identity
 
 The desktop app is `shiyou` (`com.shiyou.desktop`, with `.beta` and `.dev` channels) and registers the `shiyou://`

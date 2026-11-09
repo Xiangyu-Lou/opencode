@@ -126,6 +126,9 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
       id: "usage.view",
       title: language.t("command.usage.view"),
       description: language.t("command.usage.view.description"),
+      // shiyou: the dialog shows OpenCode Go and Console usage, services shiyou turns off.
+      hidden: true,
+      disabled: true,
       onSelect: () => void viewUsage(),
     }),
     providerCommand({
