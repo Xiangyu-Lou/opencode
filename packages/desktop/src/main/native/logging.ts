@@ -17,9 +17,9 @@ import {
   References,
   Stream,
 } from "effect"
-import { homedir } from "node:os"
 import { VERSION } from "../constants"
 import { marks } from "../lifecycle/marks"
+import { serverRoot } from "../service/shiyou-server"
 import {
   EXPORT_ARCHIVE_TIMEOUT_MS,
   initialLoggingState,
@@ -347,10 +347,11 @@ function manifest(path: Path.Path, netLogPath: string | undefined) {
   }
 }
 
+// shiyou: the bundled server logs under shiyou's own app data; an installed OpenCode's logs stay out of the export.
 function serverLogRoots(path: Path.Path) {
-  const xdgData = process.env.XDG_DATA_HOME || path.join(homedir(), ".local", "share")
+  const data = path.join(serverRoot(app.getPath("userData")), "data")
 
-  return [...new Set([path.join(xdgData, "opencode", "log"), path.join(app.getPath("userData"), "opencode", "log")])]
+  return [...new Set([path.join(data, "opencode", "log"), path.join(app.getPath("userData"), "opencode", "log")])]
 }
 
 type Entry = { name: string; path: string; offset: number } | { name: string; data: Uint8Array }

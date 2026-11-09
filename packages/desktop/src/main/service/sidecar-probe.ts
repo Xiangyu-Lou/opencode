@@ -3,6 +3,7 @@ import path from "node:path"
 import { app } from "electron"
 import type { Endpoint } from "@opencode/client/service"
 import { CHANNEL } from "../constants"
+import { serviceFile } from "./shiyou-server"
 
 // The main thread idles between showing the first window and evaluating the main bundle, waiting
 // for the renderer's asset requests. That slot is long enough to find out whether a compatible
@@ -16,7 +17,11 @@ export function startSidecarProbe() {
   const version = CHANNEL === "beta" ? undefined : bundledVersion()
 
   if (version === "") return
-  probe = import("@opencode/client/service").then(({ Service }) => Service.discover({ version })).catch(() => undefined)
+  // shiyou: only shiyou's own server, never one an installed OpenCode registered.
+  const file = serviceFile(app.getPath("userData"))
+  probe = import("@opencode/client/service")
+    .then(({ Service }) => Service.discover({ file, version }))
+    .catch(() => undefined)
 }
 
 /** The probe's result, once: a later connect must not adopt a service that may have exited since boot. */

@@ -2,7 +2,7 @@ import { app } from "electron"
 import type { Endpoint } from "@opencode/client/service"
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect"
 import { SidecarChanged } from "../../shared/ipc-rpc/events"
-import { CHANNEL } from "../constants"
+import { APP_ID, CHANNEL } from "../constants"
 import { emitIpcEvent } from "../ipc-events"
 import { getMainWindows } from "../windows"
 import { BackgroundServiceMachine } from "./background-service-machine"
@@ -10,6 +10,7 @@ import { cleanStages } from "./cli-stages"
 import { keptStages, serviceVersion, shouldRetryEnsure } from "./cli-version"
 import { DesktopCli } from "./desktop-cli"
 import { SidecarCredentials } from "./sidecar-credentials"
+import { serverEnv, serverPort, serviceFile } from "./shiyou-server"
 import { takeSidecarProbe } from "./sidecar-probe"
 
 export * as BackgroundService from "./background-service"
@@ -62,13 +63,17 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
     setup.client.Service.ensure({
       file: setup.file,
       version,
+      env: setup.env,
       // A fixed port makes a second contender fail to bind and back off; port 0 never collides, so two
       // services could boot against the same database.
+      // shiyou: every build uses its own port, never an installed OpenCode service's.
       command: [
         ...setup.cli.command,
         "serve",
         "--service",
-        ...(setup.isolated ? ["--hostname", "0.0.0.0", "--port", String(0x0c0c)] : []),
+        ...(setup.isolated ? ["--hostname", "0.0.0.0"] : []),
+        "--port",
+        String(serverPort(APP_ID)),
       ],
       onStart: (reason, previousVersion) =>
         runFork(Effect.logInfo("v2 CLI background service starting", { reason, previousVersion })),
@@ -99,25 +104,20 @@ const ensure = Effect.fn("BackgroundService.ensure")(function* (mode: Background
 
 const prepare = Effect.fn("BackgroundService.prepare")(function* (mode: BackgroundServiceMachine.ConnectMode) {
   yield* Effect.logInfo("starting v2 background service")
-  const path = yield* Path.Path
   const desktopCli = yield* DesktopCli.Service
   const isolated = !app.isPackaged && process.env.OPENCODE_DESKTOP_ISOLATED_SERVER === "1"
   const cli = yield* desktopCli.resolve
   const version = serviceVersion({ channel: CHANNEL, isolated, mode, version: cli.version })
 
-  if (isolated) process.env.XDG_STATE_HOME = app.getPath("userData")
   const client = yield* Effect.promise(() => import("@opencode/client/service"))
 
-  const file =
-    process.env.OPENCODE_DESKTOP_SERVER_CHANNEL === "local"
-      ? path.join(
-          process.env.XDG_STATE_HOME ?? path.join(app.getPath("home"), ".local", "state"),
-          "opencode",
-          "service-local.json",
-        )
-      : undefined
+  // shiyou: every build keeps its server's registration, sessions, sign-ins, config and cache under its own app data,
+  // never in an installed OpenCode's folders. See shiyou-server.ts.
+  const userData = app.getPath("userData")
+  const file = serviceFile(userData)
+  const env = serverEnv(userData)
 
-  return { cli, client, file, isolated, version }
+  return { cli, client, env, file, isolated, version }
 })
 
 const adopt = Effect.fn("BackgroundService.adopt")(function* (
@@ -132,7 +132,7 @@ const adopt = Effect.fn("BackgroundService.adopt")(function* (
 
   if (url.hostname === "0.0.0.0") url.hostname = "127.0.0.1"
 
-  const runningVersion = yield* fs.readFileString(setup.file ?? setup.client.fallback()).pipe(
+  const runningVersion = yield* fs.readFileString(setup.file).pipe(
     Effect.map(
       (text) =>
         Option.getOrUndefined(Schema.decodeUnknownOption(Schema.fromJsonString(RegisteredService))(text))?.version,

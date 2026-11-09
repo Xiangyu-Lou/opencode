@@ -34,5 +34,21 @@ comment wherever it touches an upstream file.
 
 The desktop app is `shiyou` (`com.shiyou.desktop`, with `.beta` and `.dev` channels) and registers the `shiyou://`
 scheme, so it installs beside an OpenCode desktop app and keeps its own app data. See
-`packages/desktop/src/main/constants.ts`, `packages/desktop/electron-builder.config.ts` and
-`packages/desktop/script/dev-electron.ts`.
+`packages/desktop/src/main/constants.ts`, `packages/desktop/electron-builder.config.ts`,
+`packages/desktop/script/dev-electron.ts` and `packages/desktop/src/main/lifecycle/environment.ts`.
+
+## Its own server
+
+shiyou never shares a background server, sessions, sign-ins or config with an installed OpenCode. Its bundled server
+keeps everything under `<app data>/server/{data,config,cache,state}` and listens on its own port (`0x51C0` for shiyou,
+`0x51C1` for Beta, `0x51C2` for Dev; OpenCode uses `0xC0DE`). So shiyou never reads OpenCode's sessions, and never
+adopts, restarts or replaces an OpenCode server. See `packages/desktop/src/main/service/shiyou-server.ts`.
+
+The server gets those folders through `XDG_*`, which any CLI binary honors. The user's own `XDG_*` values travel along
+in `SHIYOU_USER_XDG`, and `packages/util/src/shiyou-user-env.ts` hands them back once the server has read its roots,
+so terminals and tools started from shiyou keep the user's folders (an unset value comes back empty, which XDG reads
+as unset). That step lives in this fork's CLI: a desktop build that downloads a published OpenCode CLI instead of
+bundling `packages/cli/dist` keeps the separation, but its terminals see shiyou's server folders.
+
+Still shared on purpose: project files (`.opencode/` in a repository), `~/.claude` and `~/.agents`, and an
+`OPENCODE_CONFIG_DIR` or `OPENCODE_DB` set in your shell.

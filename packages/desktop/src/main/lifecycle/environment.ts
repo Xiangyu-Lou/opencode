@@ -59,8 +59,10 @@ export const prepareDesktop = Effect.gen(function* () {
   const path = yield* Path.Path
   const paths = yield* DesktopPaths.resolve
 
+  // shiyou: claim its own scheme (see electron-builder.config.ts), never the opencode:// links an installed OpenCode
+  // desktop app handles.
   if (app.isPackaged || process.env.OPENCODE_DESKTOP_DISABLE_PROTOCOL_REGISTRATION !== "1")
-    app.setAsDefaultProtocolClient("opencode")
+    app.setAsDefaultProtocolClient("shiyou")
   const runFork = Effect.runForkWith(yield* Effect.context())
   setProtocolReporter((level, message, data) =>
     runFork(scoped("protocol", level === "error" ? Effect.logError(message, data) : Effect.logWarning(message, data))),
