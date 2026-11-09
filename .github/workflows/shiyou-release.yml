@@ -1,14 +1,18 @@
 name: shiyou-release
-run-name: "shiyou release ${{ inputs.version || '(package.json version)' }}"
+run-name: "shiyou release ${{ github.ref_type == 'tag' && github.ref_name || inputs.version || '(package.json version)' }}"
 
 # shiyou: fork-only. Builds this fork's CLI and the shiyou desktop client and publishes the macOS Apple Silicon DMG
-# and the Windows x64 installer as a GitHub Release of this repository, tagged shiyou-v<version>. It uploads nowhere
+# and the Windows x64 installer as a GitHub Release of this repository, tagged shiyou-v<version>. Start it by pushing
+# that tag, or from the Actions tab (which tags the commit it runs on). It uploads nowhere
 # else and uses no secrets, so the installers are unsigned: the macOS app is ad-hoc signed and not notarized.
 # Upstream's release.yml, which publishes to OpenCode's own channels, only runs in anomalyco/opencode.
 # The desktop bundles the CLI built here (packages/cli/dist), never a published OpenCode CLI, so the server stays
 # apart from an installed OpenCode (see brand/README.md).
 
 on:
+  # Pushing a shiyou-v<version> tag releases that commit as <version>.
+  push:
+    tags: ["shiyou-v*"]
   workflow_dispatch:
     inputs:
       version:
@@ -52,14 +56,18 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           base=$(node -p "require('./packages/cli/package.json').version")
-          version=${INPUT_VERSION:-$(node -p "require('./packages/desktop/package.json').version")}
-          version=${version#v}
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=${GITHUB_REF_NAME#shiyou-v}
+          else
+            version=${INPUT_VERSION:-$(node -p "require('./packages/desktop/package.json').version")}
+            version=${version#v}
+          fi
           if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
             echo "::error::Version must look like 1.2.3 or 1.2.3-rc.1, got '$version'"
             exit 1
           fi
           tag="shiyou-v$version"
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+          if [ "$GITHUB_REF_TYPE" != tag ] && git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
             echo "::error::Tag $tag already exists; pick another version"
             exit 1
           fi

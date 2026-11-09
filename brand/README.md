@@ -71,10 +71,11 @@ Still shared on purpose: project files (`.opencode/` in a repository), `~/.claud
 ## Releases
 
 `.github/workflows/shiyou-release.yml` builds this fork's CLI and the desktop client and publishes a GitHub Release
-tagged `shiyou-v<version>` with the macOS Apple Silicon DMG and the Windows x64 installer. Start it from the Actions
-tab (**shiyou-release → Run workflow**); the version defaults to `packages/desktop/package.json`. It needs no secrets,
-so the builds are unsigned: the macOS app is ad-hoc signed (`.github/shiyou/package-macos.sh`) and not notarized.
+tagged `shiyou-v<version>` with the macOS Apple Silicon DMG and the Windows x64 installer. Start it by pushing a
+`shiyou-v<version>` tag, or from the Actions tab (**shiyou-release → Run workflow**, version defaulting to
+`packages/desktop/package.json`). It needs no secrets, so the builds are unsigned: the macOS app is ad-hoc signed
+(`.github/shiyou/package-macos.sh`) and not notarized.
 
 Upstream's own workflows stay in place for easy syncs. `shiyou-disable-upstream-workflows.yml` turns them off in the
-fork (they triage and close pull requests, publish to OpenCode's channels, or need upstream's runners); run it again
-after a sync adds workflows.
+fork (they triage and close pull requests, publish to OpenCode's channels, or need upstream's runners) and cancels
+their unfinished runs. It runs on every push to dev that changes a workflow, so a sync that adds one turns it off too.
