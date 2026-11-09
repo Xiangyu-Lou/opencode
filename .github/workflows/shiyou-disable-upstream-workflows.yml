@@ -51,5 +51,5 @@ jobs:
           done | sort -u > runs.tsv
           while IFS=$'\t' read -r id path; do
             echo "Cancelling run $id of $path"
-            gh api -X POST "repos/$GH_REPO/actions/runs/$id/cancel" || true
+            gh api -X POST "repos/$GH_REPO/actions/runs/$id/cancel" > /dev/null || true
           done < runs.tsv
