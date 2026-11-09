@@ -1,0 +1,239 @@
+name: shiyou-release
+run-name: "shiyou release ${{ inputs.version || '(package.json version)' }}"
+
+# shiyou: fork-only. Builds this fork's CLI and the shiyou desktop client and publishes the macOS Apple Silicon DMG
+# and the Windows x64 installer as a GitHub Release of this repository, tagged shiyou-v<version>. It uploads nowhere
+# else and uses no secrets, so the installers are unsigned: the macOS app is ad-hoc signed and not notarized.
+# Upstream's release.yml, which publishes to OpenCode's own channels, only runs in anomalyco/opencode.
+# The desktop bundles the CLI built here (packages/cli/dist), never a published OpenCode CLI, so the server stays
+# apart from an installed OpenCode (see brand/README.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, like 2.2.5 (blank: packages/desktop/package.json). Tagged shiyou-v<version>."
+        required: false
+        type: string
+      prerelease:
+        description: "Mark the GitHub Release as a pre-release"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    if: github.repository != 'anomalyco/opencode'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      base: ${{ steps.plan.outputs.base }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - id: plan
+        name: Plan
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          base=$(node -p "require('./packages/cli/package.json').version")
+          version=${INPUT_VERSION:-$(node -p "require('./packages/desktop/package.json').version")}
+          version=${version#v}
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::Version must look like 1.2.3 or 1.2.3-rc.1, got '$version'"
+            exit 1
+          fi
+          tag="shiyou-v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::error::Tag $tag already exists; pick another version"
+            exit 1
+          fi
+          echo "Releasing shiyou $version (OpenCode $base) as $tag from $GITHUB_SHA"
+          {
+            echo "version=$version"
+            echo "base=$base"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+  # Cross-compiles the CLI on Linux, like upstream's release.yml. The desktop for windows-x64 bundles the baseline CLI.
+  build-cli:
+    needs: plan
+    strategy:
+      matrix:
+        include:
+          - { target: darwin-arm64, dir: cli-darwin-arm64 }
+          - { target: windows-x64-baseline, dir: cli-windows-x64-baseline }
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
+      OPENCODE_CHANNEL: latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Set up Bun
+        uses: ./.github/actions/setup-bun
+        with:
+          bun-version: 1.4.4
+      - name: Fetch models catalog
+        run: bun packages/core/script/update-models-snapshot.ts .cache/models-catalog/api.json
+      - name: Build
+        working-directory: packages/cli
+        run: bun run build && rm -rf dist/.bun
+        env:
+          OPENCODE_TARGET: ${{ matrix.target }}
+          BUN_COMPILE_RELEASE: bun-v1.4.4
+          OPENCODE_MODELS_SNAPSHOT: ${{ github.workspace }}/.cache/models-catalog/api.json
+          GH_TOKEN: ${{ github.token }} # read-only; raises the rate limit for Bun release downloads
+      - name: Upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shiyou-cli-${{ matrix.target }}
+          path: packages/cli/dist/${{ matrix.dir }}
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop:
+    needs: [plan, build-cli]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            cli: darwin-arm64
+            dir: cli-darwin-arm64
+            host: macos-26
+            install: --os=darwin --cpu=arm64
+          - target: windows-x64
+            cli: windows-x64-baseline
+            dir: cli-windows-x64-baseline
+            host: windows-2025
+            install: ""
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 90
+    env:
+      OPENCODE_VERSION: ${{ needs.plan.outputs.version }}
+      OPENCODE_CHANNEL: latest
+      OPENCODE_TARGET: ${{ matrix.target }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Download CLI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shiyou-cli-${{ matrix.cli }}
+          path: packages/cli/dist/${{ matrix.dir }}
+      - name: Set up Bun
+        uses: ./.github/actions/setup-bun
+        with:
+          install-flags: ${{ matrix.install }}
+      - name: Build
+        working-directory: packages/desktop
+        run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      # macOS: the unsigned .app as a tarball. Windows: the unpacked app.
+      - name: Pack
+        working-directory: packages/desktop
+        timeout-minutes: 60
+        run: bun run pack
+      - name: Package DMG
+        if: runner.os == 'macOS'
+        run: |
+          bash .github/shiyou/package-macos.sh dist/desktop/opencode-desktop-mac-arm64.app.tar \
+            "dist/shiyou/shiyou-$OPENCODE_VERSION-mac-arm64.dmg"
+      # The second pack wraps the app in the NSIS installer; it clears dist/desktop first, so the app moves out.
+      - name: Package installer
+        if: runner.os == 'Windows'
+        timeout-minutes: 30
+        run: |
+          mv dist/desktop/app dist/shiyou-app
+          app=$(node -p "require('path').resolve('dist/shiyou-app')")
+          (cd packages/desktop && OPENCODE_DESKTOP_APP="$app" bun run pack)
+          mkdir -p dist/shiyou
+          cp dist/desktop/opencode-desktop-win-x64.exe "dist/shiyou/shiyou-$OPENCODE_VERSION-windows-x64-setup.exe"
+      - name: Upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shiyou-desktop-${{ matrix.target }}
+          path: dist/shiyou
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [plan, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: shiyou-desktop-*
+          merge-multiple: true
+          path: out
+      - name: Checksums
+        working-directory: out
+        run: sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Write notes
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          BASE: ${{ needs.plan.outputs.base }}
+        run: |
+          cat > notes.md << 'EOF'
+          shiyou (识油) @VERSION@, built from @SHA@ (based on OpenCode @BASE@).
+
+          ## Downloads
+
+          | Platform | File |
+          | --- | --- |
+          | macOS, Apple Silicon (M1 or newer) | `shiyou-@VERSION@-mac-arm64.dmg` |
+          | Windows 10/11, x64 | `shiyou-@VERSION@-windows-x64-setup.exe` |
+
+          shiyou installs beside OpenCode with its own app ID, app data and server, so it leaves an installed OpenCode
+          desktop app and CLI alone. `SHA256SUMS.txt` lists the checksums.
+
+          ## These builds are not signed
+
+          **macOS.** The app is ad-hoc signed but not notarized by Apple, so macOS blocks the first launch. Open the DMG and
+          drag shiyou to Applications, then either:
+
+          - open shiyou once, click **Done**, go to **System Settings → Privacy & Security** and click **Open Anyway**; or
+          - run `xattr -dr com.apple.quarantine /Applications/shiyou.app` in Terminal.
+
+          **Windows.** SmartScreen may show "Windows protected your PC". Click **More info → Run anyway**. The installer
+          needs no administrator rights and installs shiyou for the current user.
+          EOF
+          sed -i -e "s/@VERSION@/$VERSION/g" -e "s/@BASE@/$BASE/g" -e "s/@SHA@/$GITHUB_SHA/g" notes.md
+          cat notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" out/* --target "$GITHUB_SHA" --title "shiyou $VERSION" --notes-file notes.md "${flags[@]}"
