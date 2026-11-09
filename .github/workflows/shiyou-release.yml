@@ -1,22 +1,25 @@
 name: shiyou-release
-run-name: "shiyou release ${{ github.ref_type == 'tag' && github.ref_name || inputs.version || '(package.json version)' }}"
+run-name: "shiyou release ${{ github.ref_type == 'tag' && github.ref_name || inputs.version || '(.github/shiyou/RELEASE)' }}"
 
 # shiyou: fork-only. Builds this fork's CLI and the shiyou desktop client and publishes the macOS Apple Silicon DMG
-# and the Windows x64 installer as a GitHub Release of this repository, tagged shiyou-v<version>. Start it by pushing
-# that tag, or from the Actions tab (which tags the commit it runs on). It uploads nowhere
-# else and uses no secrets, so the installers are unsigned: the macOS app is ad-hoc signed and not notarized.
+# and the Windows x64 installer as a GitHub Release of this repository, tagged shiyou-v<version>. It starts when a
+# push to dev changes the version in .github/shiyou/RELEASE, when a shiyou-v<version> tag is pushed, or from the
+# Actions tab. It uploads nowhere else and uses no secrets, so the installers are unsigned: the macOS app is ad-hoc
+# signed and not notarized.
 # Upstream's release.yml, which publishes to OpenCode's own channels, only runs in anomalyco/opencode.
 # The desktop bundles the CLI built here (packages/cli/dist), never a published OpenCode CLI, so the server stays
 # apart from an installed OpenCode (see brand/README.md).
 
 on:
-  # Pushing a shiyou-v<version> tag releases that commit as <version>.
+  # A new version in .github/shiyou/RELEASE on dev, or a pushed shiyou-v<version> tag, releases that commit.
   push:
+    branches: [dev]
+    paths: [".github/shiyou/RELEASE"]
     tags: ["shiyou-v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, like 2.2.5 (blank: packages/desktop/package.json). Tagged shiyou-v<version>."
+        description: "Version, like 2.2.5 (blank: .github/shiyou/RELEASE). Tagged shiyou-v<version>."
         required: false
         type: string
       prerelease:
@@ -45,6 +48,7 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       base: ${{ steps.plan.outputs.base }}
       tag: ${{ steps.plan.outputs.tag }}
+      skip: ${{ steps.plan.outputs.skip }}
     steps:
       - name: Check out
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -59,7 +63,7 @@ jobs:
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             version=${GITHUB_REF_NAME#shiyou-v}
           else
-            version=${INPUT_VERSION:-$(node -p "require('./packages/desktop/package.json').version")}
+            version=${INPUT_VERSION:-$(tr -d '[:space:]' < .github/shiyou/RELEASE)}
             version=${version#v}
           fi
           if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
@@ -68,6 +72,12 @@ jobs:
           fi
           tag="shiyou-v$version"
           if [ "$GITHUB_REF_TYPE" != tag ] && git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            # A push that touches RELEASE without a new version has nothing to release.
+            if [ "$GITHUB_EVENT_NAME" = push ]; then
+              echo "::notice::$tag is already released; nothing to do"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "::error::Tag $tag already exists; pick another version"
             exit 1
           fi
@@ -81,6 +91,7 @@ jobs:
   # Cross-compiles the CLI on Linux, like upstream's release.yml. The desktop for windows-x64 bundles the baseline CLI.
   build-cli:
     needs: plan
+    if: needs.plan.outputs.skip != 'true'
     strategy:
       matrix:
         include:
