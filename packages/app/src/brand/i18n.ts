@@ -34,6 +34,9 @@ const APP_KEYS: ReadonlySet<string> = new Set([
   "desktop.recovery.unresponsive",
 ])
 
+/** Copy that advertises OpenCode's own services, which shiyou turns off (see brand/README.md), is left empty. */
+const SERVICE_KEYS: ReadonlySet<string> = new Set(["command.provider.connect.description"])
+
 /** The same, for built-in GUI plugins' catalogs, by plugin id. */
 const PLUGIN_KEYS = new Map([
   ["pairing", new Set(["screenActive.description"])],
@@ -42,19 +45,23 @@ const PLUGIN_KEYS = new Map([
 
 const NO_KEYS: ReadonlySet<string> = new Set()
 
-function rebrand<T extends Record<string, string>>(messages: T, keys: ReadonlySet<string>): { [K in keyof T]: string } {
+function rebrand<T extends Record<string, string>>(
+  messages: T,
+  keys: ReadonlySet<string>,
+  emptied: ReadonlySet<string> = NO_KEYS,
+): { [K in keyof T]: string } {
   // SAFETY: the entries keep every key of `messages` and map each to a string.
   return Object.fromEntries(
     Object.entries(messages).map(([key, value]) => [
       key,
-      keys.has(key) ? value.replaceAll("OpenCode", BRAND_NAME) : value,
+      emptied.has(key) ? "" : keys.has(key) ? value.replaceAll("OpenCode", BRAND_NAME) : value,
     ]),
   ) as { [K in keyof T]: string }
 }
 
 /** An app, UI or desktop-native dictionary, in any locale, with the client's own name. */
 export function rebrandMessages<T extends Record<string, string>>(messages: T) {
-  return rebrand(messages, APP_KEYS)
+  return rebrand(messages, APP_KEYS, SERVICE_KEYS)
 }
 
 /** A built-in GUI plugin's catalog with the client's own name. */
