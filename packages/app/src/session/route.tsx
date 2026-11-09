@@ -7,6 +7,7 @@ import { DataProvider } from "@opencode/session-ui/context"
 import { SessionUserMessage } from "@opencode/session-ui/message"
 import { TextShimmer } from "@opencode/ui/text-shimmer"
 import { CommentsProvider } from "@/composer/comments"
+import { BRAND_NAME } from "@/brand/name"
 import { readPromptPresentation } from "@/composer/comment-note"
 import { FileProvider } from "@/workspaces/files/model"
 import { LocationProvider } from "@/workspaces/location"
@@ -272,7 +273,7 @@ function SessionDocumentTitle(props: { title: () => string | undefined }) {
   // Keyed: <Title> reads its text inside a meta effect, which would hit a stale Show accessor once the session is deleted.
   return (
     <Show when={props.title()} keyed>
-      {(value) => <Title>{`${value} · OpenCode`}</Title>}
+      {(value) => <Title>{`${value} · ${BRAND_NAME}`}</Title>}
     </Show>
   )
 }

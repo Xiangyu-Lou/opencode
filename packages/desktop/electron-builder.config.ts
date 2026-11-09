@@ -9,13 +9,6 @@ import { CLI_BINARIES, getCurrentCli, nodePtyPackage } from "./script/utils"
 
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
 
-// The Electron 42 packaging update briefly installed Linux launchers/icons under
-// "opencode-desktop". Keep that hidden desktop entry around so existing GNOME/KDE
-// pins still resolve after the canonical app id changes back to ai.opencode.desktop.
-const legacyDesktopEntry = path.join(packageDir, "resources", "linux", "opencode-desktop.desktop")
-
-const legacyDesktopEntryFpm = `${legacyDesktopEntry}=/usr/share/applications/opencode-desktop.desktop`
-
 // rpmbuild adds /usr/lib/.build-id links for every ELF file. The bundled Electron
 // binaries are byte-identical across apps on the same Electron version, so those
 // links collide with other Electron RPMs (Slack, Unity Hub, ...) and rpm/zypper
@@ -40,10 +33,12 @@ function resolveChannel() {
   return "dev"
 }
 
+// shiyou: its own app ids, product names, URL scheme and Linux package names, so it installs beside an OpenCode
+// desktop app instead of over it. Keep in sync with src/main/constants.ts and script/dev-electron.ts.
 const APP_IDS = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
+  dev: "com.shiyou.desktop.dev",
+  beta: "com.shiyou.desktop.beta",
+  prod: "com.shiyou.desktop",
 } as const
 
 // libappimage (used by AppImageLauncher) resolves the .desktop entry inside an
@@ -173,8 +168,8 @@ const getBase = (appId: string): Configuration => {
       target: ["dmg", "zip"],
     },
     protocols: {
-      name: "OpenCode",
-      schemes: ["opencode"],
+      name: "shiyou",
+      schemes: ["shiyou"],
     },
     win: {
       icon: `resources/icons/icon.ico`,
@@ -218,7 +213,7 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode Dev",
+        productName: "shiyou Dev",
         publish: {
           provider: "generic",
           url: "https://opencode.ai/update/api/dev/desktop/opencode/",
@@ -226,7 +221,7 @@ export function getConfig() {
         },
         deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
         rpm: {
-          packageName: "opencode-dev",
+          packageName: "shiyou-dev",
           fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId)],
         },
       }
@@ -236,8 +231,8 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode Beta",
-        protocols: { name: "OpenCode Beta", schemes: ["opencode"] },
+        productName: "shiyou Beta",
+        protocols: { name: "shiyou Beta", schemes: ["shiyou"] },
         publish: {
           provider: "generic",
           url: "https://opencode.ai/update/api/beta/desktop/opencode/",
@@ -245,7 +240,7 @@ export function getConfig() {
         },
         deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
         rpm: {
-          packageName: "opencode-beta",
+          packageName: "shiyou-beta",
           fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId)],
         },
       }
@@ -255,8 +250,8 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode",
-        protocols: { name: "OpenCode", schemes: ["opencode"] },
+        productName: "shiyou",
+        protocols: { name: "shiyou", schemes: ["shiyou"] },
         // An Icon Composer package compiles to Assets.car, which macOS 26 and later draw the app icon from
         // (Dock, Finder, system dialogs and the system icon styles). Older macOS keeps using the ICNS.
         mac: { ...base.mac, icon: "resources/icons/icon.icon" },
@@ -267,8 +262,9 @@ export function getConfig() {
           url: "https://opencode.ai/update/api/latest/desktop/opencode/",
           channel: "latest",
         },
-        deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
-        rpm: { packageName: "opencode", fpm: [rpmNoBuildIdLinksFpm, metainfoFpm(appId), legacyDesktopEntryFpm] },
+        // shiyou: no legacy opencode-desktop launcher; it is OpenCode's file and would collide with its package.
+        deb: { fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: "shiyou", fpm: [rpmNoBuildIdLinksFpm, metainfoFpm(appId)] },
       }
     }
   }

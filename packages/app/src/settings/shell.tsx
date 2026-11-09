@@ -25,7 +25,7 @@ import { SettingsWorkspaces } from "./workspaces/workspaces"
 import { useWorkspacesPrefetch } from "./workspaces/queries"
 import { SettingsProjects } from "./workspaces/projects"
 import { SettingsExtensions } from "./providers/extensions"
-import { SettingsAbout } from "./about/about"
+import { BrandAbout } from "@/brand/about"
 import { SettingsServerDataScope } from "./server-scope"
 import { SettingsNavigation, type SettingsNavGroup } from "./navigation"
 import { SettingsProjectGeneral } from "./workspaces/project"
@@ -264,7 +264,7 @@ function RootSettings() {
         <SettingsExperimental />
       </Tabs.Content>
       <Tabs.Content value="about" class="settings-panel settings-about">
-        <SettingsAbout active={surface.view().tab === "about"} />
+        <BrandAbout active={surface.view().tab === "about"} />
       </Tabs.Content>
       <Show
         when={reachable()}

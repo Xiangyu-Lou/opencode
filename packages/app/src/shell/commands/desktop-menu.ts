@@ -88,7 +88,7 @@ export const DESKTOP_MENU: DesktopMenu[] = [
     platforms: ["macos"],
     items: [
       { type: "item", role: "about" },
-      { type: "item", labelKey: "desktop.menu.installCli", action: "app.installCli" },
+      // shiyou: no Install CLI. It writes ~/.opencode/bin/opencode, where an installed OpenCode CLI lives.
       { type: "item", labelKey: "desktop.menu.settings", command: "settings.open", accelerator: { macos: "Cmd+," } },
       { type: "item", labelKey: "desktop.menu.reloadWebview", action: "view.reload" },
       { type: "item", labelKey: "desktop.menu.restart", action: "app.relaunch" },
@@ -271,22 +271,8 @@ export const DESKTOP_MENU: DesktopMenu[] = [
   {
     id: "help",
     labelKey: "desktop.menu.help",
-    items: [
-      { type: "item", labelKey: "desktop.menu.documentation", href: "https://opencode.ai/docs" },
-      { type: "item", labelKey: "desktop.menu.supportForum", href: "https://discord.com/invite/opencode" },
-      { type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" },
-      { type: "separator" },
-      {
-        type: "item",
-        labelKey: "desktop.menu.shareFeedback",
-        href: "https://github.com/anomalyco/opencode/issues/new?template=feature_request.yml",
-      },
-      {
-        type: "item",
-        labelKey: "desktop.menu.reportBug",
-        href: "https://github.com/anomalyco/opencode/issues/new?template=bug_report.yml",
-      },
-    ],
+    // shiyou: the OpenCode documentation, Discord and GitHub issue links are removed.
+    items: [{ type: "item", labelKey: "desktop.menu.exportLogs", command: "logs.export" }],
   },
 ]
 

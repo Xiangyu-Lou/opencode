@@ -17,8 +17,6 @@ import browser from "./browser"
 import browserRenderer from "./browser/renderer"
 import pairing from "./pairing"
 import pairingRenderer from "./pairing/renderer"
-import updater from "./updater"
-import updaterRenderer from "./updater/renderer"
 import ssh from "./ssh"
 import sshRenderer from "./ssh/renderer"
 import wsl from "./wsl"
@@ -46,7 +44,7 @@ export const builtins = compose({
   details: { ...details, windowEntry: eager(detailsRenderer) },
   browser: { ...browser, windowEntry: eager(browserRenderer) },
   pairing: { ...pairing, windowEntry: eager(pairingRenderer) },
-  updater: { ...updater, windowEntry: eager(updaterRenderer) },
+  // shiyou: no updater. It installs official OpenCode releases from opencode.ai over this app.
   ssh: { ...ssh, windowEntry: eager(sshRenderer) },
   wsl: { ...wsl, windowEntry: eager(wslRenderer) },
   "microsoft-office": { ...microsoftOffice, windowEntry: eager(microsoftOfficeRenderer) },

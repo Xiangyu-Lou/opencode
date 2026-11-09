@@ -1,5 +1,6 @@
 import type { Platform } from "@opencode/app/desktop"
 import type { ElectronAPI } from "../api-types"
+import notificationIcon from "./notification-icon.png"
 
 type DesktopNotifyAPI = Pick<ElectronAPI, "getWindowFocused" | "showWindow" | "setWindowFocus">
 
@@ -15,7 +16,8 @@ export function createDesktopNotify(api: DesktopNotifyAPI): Platform["notify"] {
 
     const notification = new Notification(title, {
       body: description ?? "",
-      icon: "https://opencode.ai/favicon-96x96-v3.png",
+      // shiyou: a bundled icon instead of one fetched from opencode.ai.
+      icon: notificationIcon,
       silent: true,
     })
 
