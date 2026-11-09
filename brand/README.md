@@ -67,3 +67,14 @@ bundling `packages/cli/dist` keeps the separation, but its terminals see shiyou'
 
 Still shared on purpose: project files (`.opencode/` in a repository), `~/.claude` and `~/.agents`, and an
 `OPENCODE_CONFIG_DIR` or `OPENCODE_DB` set in your shell.
+
+## Releases
+
+`.github/workflows/shiyou-release.yml` builds this fork's CLI and the desktop client and publishes a GitHub Release
+tagged `shiyou-v<version>` with the macOS Apple Silicon DMG and the Windows x64 installer. Start it from the Actions
+tab (**shiyou-release → Run workflow**); the version defaults to `packages/desktop/package.json`. It needs no secrets,
+so the builds are unsigned: the macOS app is ad-hoc signed (`.github/shiyou/package-macos.sh`) and not notarized.
+
+Upstream's own workflows stay in place for easy syncs. `shiyou-disable-upstream-workflows.yml` turns them off in the
+fork (they triage and close pull requests, publish to OpenCode's channels, or need upstream's runners); run it again
+after a sync adds workflows.

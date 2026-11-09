@@ -1,0 +1,35 @@
+name: shiyou-disable-upstream-workflows
+
+# shiyou: fork-only. Once Actions is on, a fork runs every workflow it inherits. Upstream's workflows publish to
+# OpenCode's own channels (already limited to anomalyco/opencode), triage issues and pull requests (labelling and
+# closing them here), or wait for Blacksmith runners only upstream has. This turns off every workflow except the
+# shiyou-* ones, without touching upstream's files. Run it again after an upstream sync adds workflows, and turn one
+# back on from its page in the Actions tab.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  disable:
+    if: github.repository != 'anomalyco/opencode'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Disable upstream workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$GH_REPO/actions/workflows" --paginate --jq '.workflows[]
+            | select(.state == "active")
+            | select(.path | startswith(".github/workflows/"))
+            | select(.path | startswith(".github/workflows/shiyou-") | not)
+            | "\(.id)\t\(.path)"' > workflows.tsv
+          while IFS=$'\t' read -r id path; do
+            echo "Disabling $path"
+            gh api -X PUT "repos/$GH_REPO/actions/workflows/$id/disable"
+          done < workflows.tsv
+          echo "Disabled $(wc -l < workflows.tsv | tr -d ' ') workflows"
