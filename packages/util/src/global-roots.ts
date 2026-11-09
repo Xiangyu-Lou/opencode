@@ -1,11 +1,15 @@
 import os from "os"
 import path from "path"
+import { restoreUserXdg } from "./shiyou-user-env.js"
 
 const home = os.homedir()
 const data = process.env.XDG_DATA_HOME || (home ? path.join(home, ".local", "share") : undefined)
 const cache = process.env.XDG_CACHE_HOME || (home ? path.join(home, ".cache") : undefined)
 const config = process.env.XDG_CONFIG_HOME || (home ? path.join(home, ".config") : undefined)
 const state = process.env.XDG_STATE_HOME || (home ? path.join(home, ".local", "state") : undefined)
+
+// shiyou: the roots are read; what this process starts gets the user's own XDG folders back.
+restoreUserXdg()
 
 /** The XDG base directories that root opencode's global paths. */
 export function roots(app: string) {
