@@ -3,10 +3,14 @@ name: shiyou-disable-upstream-workflows
 # shiyou: fork-only. Once Actions is on, a fork runs every workflow it inherits. Upstream's workflows publish to
 # OpenCode's own channels (already limited to anomalyco/opencode), triage issues and pull requests (labelling and
 # closing them here), or wait for Blacksmith runners only upstream has. This turns off every workflow except the
-# shiyou-* ones, without touching upstream's files. Run it again after an upstream sync adds workflows, and turn one
-# back on from its page in the Actions tab.
+# shiyou-* ones and cancels their unfinished runs, without touching upstream's files. It runs whenever a push to dev
+# changes a workflow, so an upstream sync that adds one turns it off too. Turn one back on from its page in the
+# Actions tab.
 
 on:
+  push:
+    branches: [dev]
+    paths: [".github/workflows/**"]
   workflow_dispatch:
 
 permissions:
@@ -24,12 +28,28 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh api "repos/$GH_REPO/actions/workflows" --paginate --jq '.workflows[]
-            | select(.state == "active")
             | select(.path | startswith(".github/workflows/"))
             | select(.path | startswith(".github/workflows/shiyou-") | not)
-            | "\(.id)\t\(.path)"' > workflows.tsv
-          while IFS=$'\t' read -r id path; do
-            echo "Disabling $path"
-            gh api -X PUT "repos/$GH_REPO/actions/workflows/$id/disable"
+            | "\(.id)\t\(.state)\t\(.path)"' > workflows.tsv
+          while IFS=$'\t' read -r id state path; do
+            if [ "$state" = active ]; then
+              echo "Disabling $path"
+              gh api -X PUT "repos/$GH_REPO/actions/workflows/$id/disable"
+            fi
           done < workflows.tsv
-          echo "Disabled $(wc -l < workflows.tsv | tr -d ' ') workflows"
+      # A push that adds or changes a workflow also starts upstream's push workflows, which would wait for runners.
+      - name: Cancel their unfinished runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for status in queued waiting requested pending in_progress; do
+            gh api "repos/$GH_REPO/actions/runs?status=$status&per_page=100" --paginate --jq '.workflow_runs[]
+              | select(.path | startswith(".github/workflows/"))
+              | select(.path | startswith(".github/workflows/shiyou-") | not)
+              | "\(.id)\t\(.path)"'
+          done | sort -u > runs.tsv
+          while IFS=$'\t' read -r id path; do
+            echo "Cancelling run $id of $path"
+            gh api -X POST "repos/$GH_REPO/actions/runs/$id/cancel" || true
+          done < runs.tsv
