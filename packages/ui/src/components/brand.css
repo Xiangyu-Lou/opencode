@@ -1,0 +1,8 @@
+/* The 识油 wordmark is slate on light surfaces and follows the strong text colour on dark ones. */
+[data-component="brand-logo"] {
+  --brand-text: #3b4b64;
+}
+
+[data-color-scheme="dark"] [data-component="brand-logo"] {
+  --brand-text: var(--v2-text-text-base, #e8e8e8);
+}

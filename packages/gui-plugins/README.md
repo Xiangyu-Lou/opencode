@@ -762,7 +762,7 @@ export const builtins = compose({
   details,
   browser: { ...browser, mainEntry: () => import("./browser/main") },
   pairing: { ...pairing, mainEntry: () => import("./pairing/main") },
-  updater: { ...updater, mainEntry: () => import("./updater/main") },
+  // shiyou: no updater. It installs official OpenCode releases from opencode.ai over this app.
   ssh: { ...ssh, mainEntry: () => import("./ssh/main") },
   wsl: { ...wsl, mainEntry: () => import("./wsl/main") },
   "microsoft-office": microsoftOffice,
@@ -787,7 +787,7 @@ export const builtins = compose({
   details: { ...details, windowEntry: eager(detailsRenderer) },
   browser: { ...browser, windowEntry: eager(browserRenderer) },
   pairing: { ...pairing, windowEntry: eager(pairingRenderer) },
-  updater: { ...updater, windowEntry: eager(updaterRenderer) },
+  // shiyou: no updater. It installs official OpenCode releases from opencode.ai over this app.
   ssh: { ...ssh, windowEntry: eager(sshRenderer) },
   wsl: { ...wsl, windowEntry: eager(wslRenderer) },
   "microsoft-office": { ...microsoftOffice, windowEntry: eager(microsoftOfficeRenderer) },

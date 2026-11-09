@@ -8,7 +8,6 @@ import review from "./review"
 import details from "./details"
 import browser from "./browser"
 import pairing from "./pairing"
-import updater from "./updater"
 import ssh from "./ssh"
 import wsl from "./wsl"
 import microsoftOffice from "./microsoft-office"
@@ -26,7 +25,7 @@ export const builtins = compose({
   details,
   browser: { ...browser, mainEntry: () => import("./browser/main") },
   pairing: { ...pairing, mainEntry: () => import("./pairing/main") },
-  updater: { ...updater, mainEntry: () => import("./updater/main") },
+  // shiyou: no updater. It installs official OpenCode releases from opencode.ai over this app.
   ssh: { ...ssh, mainEntry: () => import("./ssh/main") },
   wsl: { ...wsl, mainEntry: () => import("./wsl/main") },
   "microsoft-office": microsoftOffice,

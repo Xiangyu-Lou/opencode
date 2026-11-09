@@ -52,6 +52,7 @@ import {
 } from "@opencode/plugin/gui"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/promise"
 import { useLanguage } from "@/runtime/i18n/language"
+import { rebrandPluginMessages } from "@/brand/i18n"
 import {
   createPluginDialogState,
   transitionPluginDialog,
@@ -502,7 +503,7 @@ function createHost(input: HostInput) {
       // The current language's catalog loads with the entry, so the first render is already translated.
       return void Promise.all([
         Promise.try(effect.load),
-        Promise.try(() => loadMessages(effect.definition.i18n, language.locale())),
+        Promise.try(() => loadMessages(effect.definition.id, effect.definition.i18n, language.locale())),
       ]).then(
         ([module, messages]) =>
           dispatch({ type: "loaded", id: effect.id, attempt: effect.attempt, setup: module.default, messages }),
@@ -602,7 +603,7 @@ function createHost(input: HostInput) {
     const controller = new AbortController()
     const cleanups = new Set<Cleanup>()
 
-    const [catalog] = createResource(language.locale, (locale) => loadMessages(definition.i18n, locale), {
+    const [catalog] = createResource(language.locale, (locale) => loadMessages(plugin, definition.i18n, locale), {
       initialValue: initial,
     })
 
@@ -1049,8 +1050,9 @@ function owns(plugin: string, id: string) {
 }
 
 /** English merged under the locale's messages. A catalog that fails to load leaves English. */
-async function loadMessages(catalog: BuiltinCatalog | undefined, locale: string): Promise<Messages> {
-  const english = catalog?.en ?? {}
+async function loadMessages(plugin: string, catalog: BuiltinCatalog | undefined, locale: string): Promise<Messages> {
+  // shiyou: built-in plugin copy names the client shiyou where "OpenCode" meant the app (see brand/i18n.ts).
+  const english = rebrandPluginMessages(plugin, catalog?.en ?? {})
   const source = catalog?.[locale]
 
   if (!source || locale === "en") return english
@@ -1065,5 +1067,5 @@ async function loadMessages(catalog: BuiltinCatalog | undefined, locale: string)
         )
       : source
 
-  return { ...english, ...loaded }
+  return { ...english, ...rebrandPluginMessages(plugin, loaded) }
 }

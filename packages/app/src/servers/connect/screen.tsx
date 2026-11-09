@@ -3,6 +3,7 @@ import { Button } from "@opencode/ui/button"
 import { TextInput } from "@opencode/ui/text-input"
 import { Wordmark } from "@opencode/ui/wordmark"
 import { useLanguage } from "@/runtime/i18n/language"
+import { BRAND_NAME } from "@/brand/name"
 import { createServerConnectController } from "./controller"
 import { ConnectMethodSwitch } from "./method"
 import "./screen.css"
@@ -18,7 +19,7 @@ export function ConnectServerScreen(props: { url?: string } = {}) {
   return (
     <main data-component="connect-server" aria-labelledby="server-connect-title">
       <div class="server-connect-content">
-        <div class="server-connect-brand" role="img" aria-label="OpenCode">
+        <div class="server-connect-brand" role="img" aria-label={BRAND_NAME}>
           <Wordmark />
         </div>
         <header>
