@@ -768,6 +768,8 @@ export const builtins = compose({
   "microsoft-office": microsoftOffice,
   sources,
   goal,
+  // shiyou: saves the providers of the Model providers page where the bundled server reads them.
+  "custom-providers": { ...customProviders, mainEntry: () => import("./custom-providers/main") },
 })
 ```
 
@@ -793,6 +795,8 @@ export const builtins = compose({
   "microsoft-office": { ...microsoftOffice, windowEntry: eager(microsoftOfficeRenderer) },
   sources: { ...sources, windowEntry: eager(sourcesRenderer) },
   goal: { ...goal, windowEntry: eager(goalRenderer) },
+  // shiyou: the Model providers settings page, where the user adds their own API, key and models.
+  "custom-providers": { ...customProviders, windowEntry: eager(customProvidersRenderer) },
 })
 ```
 
