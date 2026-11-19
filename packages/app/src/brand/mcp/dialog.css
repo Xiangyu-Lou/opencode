@@ -1,0 +1,34 @@
+/* shiyou: the MCP server editor, on top of the server dialog's layout in settings.css. */
+
+[data-component="dialog-v2"].shiyou-mcp-dialog [data-slot="dialog-container"] {
+  width: 520px;
+}
+
+.shiyou-mcp-dialog-code input,
+.shiyou-mcp-dialog-code textarea {
+  font-family: var(--font-family-mono);
+}
+
+.shiyou-mcp-dialog-file {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.shiyou-mcp-dialog-footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shiyou-mcp-dialog-spacer {
+  flex: 1;
+}
+
+.shiyou-mcp-dialog-confirm {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: var(--line-height-base);
+  color: var(--v2-text-text-base);
+}

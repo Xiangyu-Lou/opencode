@@ -89,6 +89,35 @@ bundling `packages/cli/dist` keeps the separation, but its terminals see shiyou'
 Still shared on purpose: project files (`.opencode/` in a repository), `~/.claude` and `~/.agents`, and an
 `OPENCODE_CONFIG_DIR` or `OPENCODE_DB` set in your shell.
 
+## MCP servers in Settings and for the agent
+
+Because the server's global configuration lives in `<app data>/server/config/opencode/opencode.json(c)`, OpenCode's own
+guidance points at the wrong file: its built-in `opencode` skill tells the agent the global config is
+`~/.config/opencode/opencode.json(c)` and to add MCP servers with `opencode mcp add`, which from the agent's shell (where
+the user's `XDG_*` are back) writes the user's own OpenCode configuration. A second server plugin fixes both sides:
+
+- `packages/desktop/src/main/service/shiyou-mcp-config.plugin.js` (`shiyou.mcp-config`), installed beside
+  `shiyou-hide-opencode.js` at every start (`SERVER_PLUGINS` in `background-service.ts`). It finds the config folder from
+  its own location, and:
+  - rewrites the `opencode` skill: a first section that names shiyou's config file and server log and says `opencode`
+    shell commands reach the user's OpenCode, not shiyou; OpenCode's paths replaced where the guide spells them out; and
+    an MCP section that edits shiyou's file directly. The first section still holds when an upstream sync moves the text
+    the replacements look for (`shiyou-mcp-config.plugin.test.ts` reads the real skill and fails when it moves);
+  - adds the `shiyou_mcp_status` tool (`tools.shiyou.mcp_status` in Code Mode), so the agent can check what it
+    configured without `opencode mcp list`;
+  - serves the `shiyou.mcp-config` RPC: `read` returns the file and its text, `write` replaces the text only when the
+    file still reads what the client read (otherwise it answers `conflict` with the current text) and only with a JSON or
+    JSONC object.
+- Settings › Extensions › MCPs (`packages/app/src/brand/mcp/`) adds **Add server** and an edit button on every server the
+  global file defines, with a dialog for local commands and remote URLs (name, command or URL, environment variables or
+  headers, enabled) that also removes a server. Edits go through jsonc-parser, so comments, other settings and the
+  fields the dialog doesn't show (`timeout`, `oauth`, `codemode`…) stay; a write refused as a conflict is applied once
+  more to the new text, so an edit the agent saved meanwhile is kept. Connected to a server without the RPC, the page
+  keeps OpenCode's read-only list. Its copy is in `packages/app/src/brand/en.ts` (English only for now).
+
+The file is the one OpenCode's own config writer edits: `opencode.jsonc`, or `opencode.json` when only that one exists.
+The server reloads it on save, so servers added from Settings or by the agent connect without a restart.
+
 ## Releases
 
 `.github/workflows/shiyou-release.yml` builds this fork's CLI and the desktop client and publishes a GitHub Release

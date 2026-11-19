@@ -15,6 +15,7 @@ import {
 import { Persist, persisted } from "@/runtime/persistence/storage"
 import { Persistence } from "@/runtime/persistence/schema"
 import { rebrandMessages } from "@/brand/i18n"
+import { shiyouDict } from "@/brand/en"
 import en from "@/runtime/i18n/en"
 import { dict } from "@opencode/ui/i18n/en"
 import {
@@ -46,7 +47,8 @@ function localeDirection(locale: Locale): Direction {
   return RTL_LOCALES.has(locale) ? "rtl" : "ltr"
 }
 
-type RawDictionary = typeof en & typeof dict
+// shiyou: plus the copy of features only this fork has.
+type RawDictionary = typeof en & typeof dict & typeof shiyouDict
 
 type Dictionary = RawDictionary
 
@@ -106,7 +108,7 @@ const StoredLocaleSchema = Schema.Struct({
 
 const INTL = DESKTOP_NATIVE_LOCALE_TAGS
 
-const base: Dictionary = rebrandMessages({ ...en, ...dict })
+const base: Dictionary = rebrandMessages({ ...en, ...dict, ...shiyouDict })
 
 const dicts = new Map<Locale, Dictionary>([["en", base]])
 

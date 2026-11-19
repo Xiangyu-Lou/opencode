@@ -11,7 +11,8 @@ import { keptStages, serviceVersion, shouldRetryEnsure } from "./cli-version"
 import { DesktopCli } from "./desktop-cli"
 import { SidecarCredentials } from "./sidecar-credentials"
 import hideOpenCodePlugin from "./shiyou-hide-opencode.plugin.js?raw"
-import { hideOpenCodePluginFile, serverEnv, serverPort, serviceFile } from "./shiyou-server"
+import mcpConfigPlugin from "./shiyou-mcp-config.plugin.js?raw"
+import { serverEnv, serverPluginFile, serverPort, serviceFile } from "./shiyou-server"
 import { takeSidecarProbe } from "./sidecar-probe"
 
 export * as BackgroundService from "./background-service"
@@ -117,26 +118,40 @@ const prepare = Effect.fn("BackgroundService.prepare")(function* (mode: Backgrou
   const userData = app.getPath("userData")
   const file = serviceFile(userData)
   const env = serverEnv(userData)
-  yield* installHideOpenCodePlugin(userData)
+  yield* Effect.forEach(
+    SERVER_PLUGINS,
+    ([name, source]) =>
+      installServerPlugin(userData, name, source).pipe(
+        Effect.catch((error) => Effect.logError("failed to install a server plugin", { name, error })),
+      ),
+    { discard: true },
+  )
 
   return { cli, client, env, file, isolated, version }
 })
 
-// shiyou: keeps the server's copy of the plugin that turns off OpenCode's sign-in and models current. A failure is
-// logged and the server still starts.
-const installHideOpenCodePlugin = Effect.fn("BackgroundService.installHideOpenCodePlugin")(
-  function* (userData: string) {
-    const fs = yield* FileSystem.FileSystem
-    const path = yield* Path.Path
-    const target = hideOpenCodePluginFile(userData)
-    const current = yield* fs.readFileString(target).pipe(Effect.orElseSucceed(() => undefined))
+// shiyou: the plugins shiyou gives its server, by file name: one turns off OpenCode's sign-in and models, the other
+// lets Settings and the agent configure MCP servers in the server's own config file. See brand/README.md.
+const SERVER_PLUGINS = [
+  ["shiyou-hide-opencode.js", hideOpenCodePlugin],
+  ["shiyou-mcp-config.js", mcpConfigPlugin],
+] as const
 
-    if (current === hideOpenCodePlugin) return
-    yield* fs.makeDirectory(path.dirname(target), { recursive: true })
-    yield* fs.writeFileString(target, hideOpenCodePlugin)
-  },
-  Effect.catch((error) => Effect.logError("failed to install the plugin that hides OpenCode services", { error })),
-)
+// shiyou: keeps the server's copy of a plugin current. The caller logs a failure, and the server still starts.
+const installServerPlugin = Effect.fn("BackgroundService.installServerPlugin")(function* (
+  userData: string,
+  name: string,
+  source: string,
+) {
+  const fs = yield* FileSystem.FileSystem
+  const path = yield* Path.Path
+  const target = serverPluginFile(userData, name)
+  const current = yield* fs.readFileString(target).pipe(Effect.orElseSucceed(() => undefined))
+
+  if (current === source) return
+  yield* fs.makeDirectory(path.dirname(target), { recursive: true })
+  yield* fs.writeFileString(target, source)
+})
 
 const adopt = Effect.fn("BackgroundService.adopt")(function* (
   setup: Effect.Success<ReturnType<typeof prepare>>,

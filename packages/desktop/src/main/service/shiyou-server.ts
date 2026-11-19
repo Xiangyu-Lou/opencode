@@ -77,7 +77,7 @@ export function serverPort(appID: string) {
   return PORTS.get(appID) ?? 0x51c2
 }
 
-/** Where the plugin that turns off OpenCode's own services lives: the plugins folder of the server's global config. */
-export function hideOpenCodePluginFile(userData: string) {
-  return path.join(serverRoot(userData), "config", "opencode", "plugins", "shiyou-hide-opencode.js")
+/** Where a plugin shiyou gives its server lives: the plugins folder of the server's global config. */
+export function serverPluginFile(userData: string, name: string) {
+  return path.join(serverRoot(userData), "config", "opencode", "plugins", name)
 }

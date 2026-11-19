@@ -13,6 +13,7 @@ import { ServerConnection } from "@/runtime/server/registry"
 import { useMcpController } from "@/providers/connect/mcp"
 import { mcpRowView } from "@/providers/connect/mcp-machine"
 import { DialogMcp } from "@/providers/connect/mcp-dialog"
+import { createMcpConfig, McpConfigAdd, McpConfigEdit } from "@/brand/mcp/settings"
 import { ExtensionPlugins } from "@/runtime/plugin/extension-plugins"
 import { usePlatform } from "@/runtime/platform/platform"
 import { SettingsList } from "@/settings/list"
@@ -43,6 +44,8 @@ export const SettingsExtensions: Component<{
   // names come from the default Location so this page lists only the servers available to all projects.
   const location = () => (props.directory ? { directory: props.directory } : data.location.default())
   const mcp = useMcpController(() => props.directory)
+  // shiyou: add, edit and remove the servers of the server's global configuration file.
+  const mcpConfig = createMcpConfig()
 
   // The synced lists follow mcp.status.changed, so a finished sign-in shows up without a refetch.
   createEffect(() => {
@@ -122,9 +125,14 @@ export const SettingsExtensions: Component<{
                 <span class="settings-extension-heading text-13-medium">
                   {language.t("settings.extensions.availableAll")}
                 </span>
-                <span class="text-13-regular text-v2-text-text-muted">
-                  {language.t("settings.extensions.manageConfig")}
-                </span>
+                <McpConfigAdd
+                  config={mcpConfig}
+                  fallback={
+                    <span class="text-13-regular text-v2-text-text-muted">
+                      {language.t("settings.extensions.manageConfig")}
+                    </span>
+                  }
+                />
               </div>
               <SettingsList variant="catalog">
                 <For each={mcps()}>
@@ -145,6 +153,7 @@ export const SettingsExtensions: Component<{
                           <TruncatedText text={item.name} class="settings-extension-name" />
                         </div>
                         <div class="settings-extension-trailing">
+                          <McpConfigEdit config={mcpConfig} name={item.name} />
                           <Show when={item.status.status === "failed"}>
                             <Button
                               size="small"
