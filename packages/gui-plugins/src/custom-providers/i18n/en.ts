@@ -43,13 +43,18 @@ export default {
   "field.model.context": "Context window",
   "field.model.output": "Max output",
   "field.model.default": "Default",
+  "field.model.level": "Custom thinking level",
   "field.model.remove": "Remove model {{name}}",
+  "thinking.model": "Follow model",
   "thinking.off": "Off",
   "thinking.low": "Low",
   "thinking.medium": "Medium",
   "thinking.high": "High",
+  "thinking.custom": "Custom",
+  "thinking.custom.effort": "e.g. xhigh",
+  "thinking.custom.budget": "Tokens, e.g. 16000",
   "thinking.hint":
-    "Thinking sets how hard a model reasons by default. Models with thinking on also offer Low, Medium and High in the composer.",
+    "Follow model sends no thinking settings, so each model thinks as it does by default. Custom takes any level the API accepts, such as minimal or xhigh, or for Anthropic a thinking budget in tokens. Unless thinking is off, the composer also offers Low, Medium and High.",
   "model.add": "Add model",
   "model.fetch": "Fetch model list",
   "model.fetch.pick": "Add a listed model",
@@ -65,4 +70,8 @@ export default {
   "error.model.id": "Model {{index}}: enter the model ID, without spaces or #.",
   "error.model.duplicate": "Model {{index}}: this model ID is already listed.",
   "error.model.limit": "Model {{index}}: token limits must be whole numbers above 0.",
+  "error.model.effort":
+    "Model {{index}}: enter the thinking level as one word the API accepts, such as minimal or xhigh.",
+  "error.model.budget":
+    "Model {{index}}: enter a thinking budget of at least 1024 tokens, below the model's max output.",
 }

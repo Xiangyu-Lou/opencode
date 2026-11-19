@@ -5,11 +5,12 @@ import { uuid } from "@opencode/util/uuid"
 import type { Client } from "./page"
 import type { ModelListing } from "./contract"
 import {
+  isLevel,
+  LEVELS,
   normalize,
   PATHS,
   PROTOCOLS,
   slug,
-  THINKING,
   validate,
   type CustomProvider,
   type Problem,
@@ -18,8 +19,22 @@ import {
 } from "./model"
 import type definition from "./index"
 
-/** A model row while it is edited: token limits stay text until the form is saved. */
-type ModelDraft = { key: string; id: string; name: string; thinking: Thinking; context: string; output: string }
+/** The thinking choices of a model row. `custom` takes the level typed beside it. */
+const CHOICES = ["model", "off", ...LEVELS, "custom"] as const
+
+type Choice = (typeof CHOICES)[number]
+
+/** A model row while it is edited: token limits and a typed level stay text until the form is saved. */
+type ModelDraft = {
+  key: string
+  id: string
+  name: string
+  thinking: Choice
+  /** The level typed for `custom`. */
+  level: string
+  context: string
+  output: string
+}
 
 type Draft = {
   name: string
@@ -32,7 +47,30 @@ type Draft = {
   models: ModelDraft[]
 }
 
-const emptyModel = (id = ""): ModelDraft => ({ key: uuid(), id, name: "", thinking: "off", context: "", output: "" })
+// A new model follows the model's own thinking until the user sets a level.
+const emptyModel = (id = ""): ModelDraft => ({
+  key: uuid(),
+  id,
+  name: "",
+  thinking: "model",
+  level: "",
+  context: "",
+  output: "",
+})
+
+function choiceOf(thinking: Thinking): Pick<ModelDraft, "thinking" | "level"> {
+  if (thinking.type !== "level") return { thinking: thinking.type, level: "" }
+
+  return isLevel(thinking.level)
+    ? { thinking: thinking.level, level: "" }
+    : { thinking: "custom", level: thinking.level }
+}
+
+function thinkingOf(model: ModelDraft): Thinking {
+  if (model.thinking === "model" || model.thinking === "off") return { type: model.thinking }
+
+  return { type: "level", level: model.thinking === "custom" ? model.level : model.thinking }
+}
 
 function draftOf(provider: CustomProvider | undefined): Draft {
   if (!provider)
@@ -57,7 +95,7 @@ function draftOf(provider: CustomProvider | undefined): Draft {
       key: uuid(),
       id: model.id,
       name: model.name,
-      thinking: model.thinking,
+      ...choiceOf(model.thinking),
       context: model.context === undefined ? "" : String(model.context),
       output: model.output === undefined ? "" : String(model.output),
     })),
@@ -81,7 +119,7 @@ function providerOf(draft: Draft): CustomProvider {
             {
               id: model.id,
               name: model.name,
-              thinking: model.thinking,
+              thinking: thinkingOf(model),
               context: tokens(model.context),
               output: tokens(model.output),
             },
@@ -133,10 +171,10 @@ export function ProviderEditor(props: {
     return attempted() && value !== undefined && keys.includes(value.key)
   }
 
-  const modelInvalid = (index: number) => {
+  const modelInvalid = (index: number, ...keys: Problem["key"][]) => {
     const value = problem()
 
-    return attempted() && value !== undefined && "model" in value && value.model === index
+    return attempted() && value !== undefined && "model" in value && value.model === index && keys.includes(value.key)
   }
 
   const setName = (name: string) =>
@@ -220,7 +258,7 @@ export function ProviderEditor(props: {
   }
 
   const protocolOptions = () => PROTOCOLS.map((value) => ({ value, label: ctx.t(`protocol.${value}`) }))
-  const thinkingOptions = () => THINKING.map((value) => ({ value, label: ctx.t(`thinking.${value}`) }))
+  const thinkingOptions = () => CHOICES.map((value) => ({ value, label: ctx.t(`thinking.${value}`) }))
   const exampleRef = () => `${draft.id || "my-api"}/${draft.models[0]?.id.trim() || "model"}`
 
   const exampleURL = () => {
@@ -231,7 +269,13 @@ export function ProviderEditor(props: {
 
   const label = "text-12-medium text-v2-text-text-base"
   const hint = "text-12-regular text-v2-text-text-muted"
-  const columns = "grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)_7rem_6.5rem_6.5rem_2rem] items-center gap-2"
+  // The app's fields are 280px wide on their own; here each one fills its cell.
+  const field = "w-full min-w-0"
+  // Selects are 24px tall and fields 28px: a 28px box keeps them on one line.
+  const line = "flex h-7 min-w-0 items-center"
+
+  const columns =
+    "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(8.5rem,0.8fr)_6.5rem_6.5rem_1.75rem] items-start gap-2"
 
   return (
     <ui.Dialog
@@ -262,6 +306,7 @@ export function ProviderEditor(props: {
               onInput={setName}
               placeholder={ctx.t("field.name.placeholder")}
               invalid={invalid("error.name")}
+              class={field}
               autofocus={!editing}
             />
           </label>
@@ -273,22 +318,25 @@ export function ProviderEditor(props: {
               onInput={(value) => setDraft({ id: value, idEdited: true })}
               placeholder="my-api"
               disabled={editing}
+              class={field}
               invalid={invalid("error.id", "error.id.reserved", "error.id.taken")}
             />
             <span class={hint}>{ctx.t("field.id.hint", { example: exampleRef() })}</span>
           </label>
           <label class="flex min-w-0 flex-col gap-1.5">
             <span class={label}>{ctx.t("field.protocol")}</span>
-            <ui.Select
-              label={ctx.t("field.protocol")}
-              options={protocolOptions()}
-              value={draft.protocol}
-              onChange={(value) => {
-                setDraft({ protocol: value })
-                setListing({ type: "idle" })
-              }}
-              placement="bottom-start"
-            />
+            <div class={line}>
+              <ui.Select
+                label={ctx.t("field.protocol")}
+                options={protocolOptions()}
+                value={draft.protocol}
+                onChange={(value) => {
+                  setDraft({ protocol: value })
+                  setListing({ type: "idle" })
+                }}
+                placement="bottom-start"
+              />
+            </div>
           </label>
           <label class="flex min-w-0 flex-col gap-1.5">
             <span class={label}>{ctx.t("field.apiKey")}</span>
@@ -298,6 +346,7 @@ export function ProviderEditor(props: {
               value={draft.apiKey}
               onInput={(value) => setDraft({ apiKey: value })}
               placeholder={ctx.t("field.apiKey.placeholder")}
+              class={field}
             />
           </label>
           <label class="col-span-2 flex min-w-0 flex-col gap-1.5">
@@ -309,6 +358,7 @@ export function ProviderEditor(props: {
               onInput={(value) => setDraft({ baseURL: value })}
               placeholder="https://api.example.com/v1"
               invalid={invalid("error.baseURL")}
+              class={field}
             />
             <span class={hint}>{ctx.t("field.baseURL.hint", { example: exampleURL() })}</span>
           </label>
@@ -370,39 +420,63 @@ export function ProviderEditor(props: {
                   value={model.id}
                   onInput={(value) => setModel(model.key, "id", value)}
                   placeholder="model-id"
-                  invalid={modelInvalid(index())}
+                  invalid={modelInvalid(index(), "error.model.id", "error.model.duplicate")}
+                  class={field}
                 />
                 <ui.TextInput
                   label={ctx.t("field.model.name")}
                   value={model.name}
                   onInput={(value) => setModel(model.key, "name", value)}
                   placeholder={ctx.t("field.model.name.placeholder")}
+                  class={field}
                 />
-                <ui.Select
-                  label={ctx.t("field.model.thinking")}
-                  options={thinkingOptions()}
-                  value={model.thinking}
-                  onChange={(value) => setModel(model.key, "thinking", value)}
-                  placement="bottom-start"
-                />
+                <div class="flex min-w-0 flex-col gap-1">
+                  <div class={line}>
+                    <ui.Select
+                      label={ctx.t("field.model.thinking")}
+                      options={thinkingOptions()}
+                      value={model.thinking}
+                      onChange={(value) => setModel(model.key, "thinking", value)}
+                      placement="bottom-start"
+                    />
+                  </div>
+                  <Show when={model.thinking === "custom"}>
+                    <ui.TextInput
+                      label={ctx.t("field.model.level")}
+                      value={model.level}
+                      onInput={(value) => setModel(model.key, "level", value)}
+                      placeholder={ctx.t(
+                        draft.protocol === "anthropic" ? "thinking.custom.budget" : "thinking.custom.effort",
+                      )}
+                      invalid={modelInvalid(index(), "error.model.effort", "error.model.budget")}
+                      class={field}
+                    />
+                  </Show>
+                </div>
                 <ui.TextInput
                   label={ctx.t("field.model.context")}
                   value={model.context}
                   onInput={(value) => setModel(model.key, "context", value)}
                   placeholder={ctx.t("field.model.default")}
+                  invalid={modelInvalid(index(), "error.model.limit")}
+                  class={field}
                 />
                 <ui.TextInput
                   label={ctx.t("field.model.output")}
                   value={model.output}
                   onInput={(value) => setModel(model.key, "output", value)}
                   placeholder={ctx.t("field.model.default")}
+                  invalid={modelInvalid(index(), "error.model.limit", "error.model.budget")}
+                  class={field}
                 />
-                <ui.IconButton
-                  icon="trash"
-                  size="small"
-                  label={ctx.t("field.model.remove", { name: model.id || String(index() + 1) })}
-                  onClick={() => setDraft("models", (models) => models.filter((item) => item.key !== model.key))}
-                />
+                <div class={line}>
+                  <ui.IconButton
+                    icon="trash"
+                    size="small"
+                    label={ctx.t("field.model.remove", { name: model.id || String(index() + 1) })}
+                    onClick={() => setDraft("models", (models) => models.filter((item) => item.key !== model.key))}
+                  />
+                </div>
               </div>
             )}
           </For>

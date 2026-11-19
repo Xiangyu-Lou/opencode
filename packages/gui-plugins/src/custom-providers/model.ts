@@ -20,19 +20,27 @@ export const Protocol = Schema.Literals(PROTOCOLS)
 
 export type Protocol = typeof Protocol.Type
 
-/** How hard a model thinks by default. `off` sends no reasoning settings and offers no thinking variants. */
-export const THINKING = ["off", "low", "medium", "high"] as const
+/** Thinking levels the editor offers ready-made, and the levels a thinking model offers in the composer. */
+export const LEVELS = ["low", "medium", "high"] as const
 
-export const Thinking = Schema.Literals(THINKING)
+export type Level = (typeof LEVELS)[number]
+
+export const isLevel = (value: string): value is Level => LEVELS.some((level) => level === value)
+
+/**
+ * How a model thinks by default.
+ * - `model`: as the model itself does. No reasoning settings are sent; the composer still offers Low, Medium and High.
+ * - `off`: no reasoning settings, and no levels in the composer.
+ * - `level`: sent with every request. For OpenAI formats an effort the API accepts (`low`, `minimal`, `xhigh`, `max`…);
+ *   for Anthropic `low`, `medium`, `high` or a thinking budget in tokens.
+ */
+export const Thinking = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("model") }),
+  Schema.Struct({ type: Schema.Literal("off") }),
+  Schema.Struct({ type: Schema.Literal("level"), level: Schema.String }),
+])
 
 export type Thinking = typeof Thinking.Type
-
-/** The levels a thinking model offers in the composer's variant picker. */
-const EFFORTS = ["low", "medium", "high"] as const
-
-const Effort = Schema.Literals(EFFORTS)
-
-type Effort = typeof Effort.Type
 
 export const CustomModel = Schema.Struct({
   /** The model ID the API expects, such as `deepseek-chat`. */
@@ -92,6 +100,8 @@ export type Problem =
   | { readonly key: "error.model.id"; readonly model: number }
   | { readonly key: "error.model.duplicate"; readonly model: number }
   | { readonly key: "error.model.limit"; readonly model: number }
+  | { readonly key: "error.model.effort"; readonly model: number }
+  | { readonly key: "error.model.budget"; readonly model: number }
 
 /** The keys of `Problem`, which main sends back when the file changed under the window's own check. */
 export const PROBLEM_KEYS = [
@@ -104,6 +114,8 @@ export const PROBLEM_KEYS = [
   "error.model.id",
   "error.model.duplicate",
   "error.model.limit",
+  "error.model.effort",
+  "error.model.budget",
 ] as const satisfies readonly Problem["key"][]
 
 /** A provider ID made from its name: lower case, with runs of other characters turned into one dash. */
@@ -115,7 +127,7 @@ export function slug(name: string) {
     .slice(0, 63)
 }
 
-/** The provider as it is saved: trimmed text, and a base URL without trailing slashes. */
+/** The provider as it is saved: trimmed text, a base URL without trailing slashes, and lowercase thinking levels. */
 export function normalize(provider: CustomProvider): CustomProvider {
   return {
     id: provider.id.trim(),
@@ -126,7 +138,10 @@ export function normalize(provider: CustomProvider): CustomProvider {
     models: provider.models.map((model) => ({
       id: model.id.trim(),
       name: model.name.trim(),
-      thinking: model.thinking,
+      thinking:
+        model.thinking.type === "level"
+          ? { type: "level", level: model.thinking.level.trim().toLowerCase() }
+          : model.thinking,
       context: model.context,
       output: model.output,
     })),
@@ -162,10 +177,26 @@ export function validate(provider: CustomProvider, others: readonly string[]): P
     seen.add(item.id)
 
     if (!positive(item.context) || !positive(item.output)) return { key: "error.model.limit", model }
+
+    const level = item.thinking.type === "level" ? item.thinking.level : undefined
+
+    if (level === undefined || isLevel(level)) continue
+
+    if (provider.protocol !== "anthropic" && !EFFORT.test(level)) return { key: "error.model.effort", model }
+
+    if (provider.protocol === "anthropic" && !validBudget(level, item.output))
+      return { key: "error.model.budget", model }
   }
 
   return undefined
 }
+
+// An effort the API reads as a word, such as `minimal`, `xhigh` or `max`.
+const EFFORT = /^[a-z][a-z0-9_-]{0,31}$/
+
+// Anthropic needs at least 1024 thinking tokens, and fewer than the reply's output limit.
+const validBudget = (level: string, output = DEFAULT_OUTPUT) =>
+  /^\d+$/.test(level) && Number(level) >= 1_024 && Number(level) < output
 
 const positive = (value: number | undefined) => value === undefined || (Number.isSafeInteger(value) && value > 0)
 
@@ -178,16 +209,16 @@ function isHttpURL(value: string) {
 // The server's own default output limit for a model without one (Model.Info.default).
 const DEFAULT_OUTPUT = 32_000
 
-const BUDGETS = { low: 2_048, medium: 8_192, high: 24_576 } as const satisfies Record<Effort, number>
+const BUDGETS = { low: 2_048, medium: 8_192, high: 24_576 } as const satisfies Record<Level, number>
 
-/** Anthropic thinking budget for an effort: below the output limit, and never under the API's 1024 minimum. */
-export function budget(effort: Effort, output = DEFAULT_OUTPUT) {
-  return Math.max(1_024, Math.min(BUDGETS[effort], output - 1))
+/** Anthropic thinking budget for a level: below the output limit, and never under the API's 1024 minimum. */
+export function budget(level: Level, output = DEFAULT_OUTPUT) {
+  return Math.max(1_024, Math.min(BUDGETS[level], output - 1))
 }
 
 // The config document, as far as this plugin writes it. Every other key is the server's to read; none is written.
 const ModelSettings = Schema.Struct({
-  reasoningEffort: Schema.optional(Effort),
+  reasoningEffort: Schema.optional(Schema.String),
   reasoningSummary: Schema.optional(Schema.Literal("auto")),
   include: Schema.optional(Schema.Array(Schema.String)),
   thinking: Schema.optional(Schema.Struct({ type: Schema.Literal("enabled"), budgetTokens: Schema.Int })),
@@ -201,11 +232,11 @@ const ModelConfig = Schema.Struct({
   capabilities: Schema.Struct({
     reasoning: Schema.Union([
       Schema.Struct({ supported: Schema.Literal(false) }),
-      Schema.Struct({ supported: Schema.Literal(true), effort: Schema.Array(Effort) }),
+      Schema.Struct({ supported: Schema.Literal(true), effort: Schema.Array(Schema.String) }),
     ]),
   }),
   settings: Schema.optional(ModelSettings),
-  variants: Schema.optional(Schema.Array(Schema.Struct({ id: Effort, settings: ModelSettings }))),
+  variants: Schema.optional(Schema.Array(Schema.Struct({ id: Schema.String, settings: ModelSettings }))),
 })
 
 type ModelConfig = typeof ModelConfig.Type
@@ -222,38 +253,54 @@ export const ConfigDocument = Schema.Struct({ providers: Schema.Record(Schema.St
 
 export type ConfigDocument = typeof ConfigDocument.Type
 
-/** Request settings that make a model think at `effort`, spelled for the provider's API. */
-function effortSettings(protocol: Protocol, effort: Effort, output: number | undefined): ModelSettings {
-  if (protocol === "openai-chat") return { reasoningEffort: effort }
+/** Request settings that make a model think at `level`, spelled for the provider's API. */
+function levelSettings(protocol: Protocol, level: string, output: number | undefined): ModelSettings {
+  if (protocol === "openai-chat") return { reasoningEffort: level }
 
   // As the server spells Responses reasoning: summaries on, and encrypted reasoning kept for the next turn.
   if (protocol === "openai-responses")
-    return { reasoningEffort: effort, reasoningSummary: "auto", include: ["reasoning.encrypted_content"] }
+    return { reasoningEffort: level, reasoningSummary: "auto", include: ["reasoning.encrypted_content"] }
 
-  return { thinking: { type: "enabled", budgetTokens: budget(effort, output) } }
+  return { thinking: { type: "enabled", budgetTokens: isLevel(level) ? budget(level, output) : Number(level) } }
+}
+
+// Efforts in the order APIs rank them, so a typed level sits among Low, Medium and High in the composer.
+const EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+const rank = (effort: string) => {
+  const index = EFFORT_ORDER.indexOf(effort)
+
+  return index === -1 ? EFFORT_ORDER.length : index
+}
+
+/** The levels the composer offers: Low, Medium and High, with a typed level among them. */
+function efforts(level: string | undefined): string[] {
+  if (level === undefined || isLevel(level)) return [...LEVELS]
+
+  return [...LEVELS, level].toSorted((a, b) => rank(a) - rank(b))
 }
 
 // Undefined fields are left out when the document is written as JSON.
 function modelConfig(protocol: Protocol, model: CustomModel): ModelConfig {
-  const thinking = model.thinking === "off" ? undefined : model.thinking
+  const thinks = model.thinking.type !== "off"
+  const level = model.thinking.type === "level" ? model.thinking.level : undefined
   const limited = model.context !== undefined || model.output !== undefined
 
   return {
     name: model.name || undefined,
     limit: limited ? { context: model.context, output: model.output } : undefined,
-    // OpenAI APIs: the server spells the low/medium/high variants itself. Anthropic: its variants assume Claude, so
-    // budgeted variants are spelled here and the server's are turned off. Off: no variants at all.
+    // OpenAI APIs: the server spells the composer's levels itself. Anthropic: its variants assume Claude, so budgeted
+    // variants are spelled here and the server's are turned off. Off: no levels at all.
     capabilities: {
       reasoning:
-        thinking === undefined || protocol === "anthropic"
-          ? { supported: false }
-          : { supported: true, effort: [...EFFORTS] },
+        thinks && protocol !== "anthropic" ? { supported: true, effort: efforts(level) } : { supported: false },
     },
-    // The model's own settings are the composer's Default variant, so the default effort lives here.
-    settings: thinking === undefined ? undefined : effortSettings(protocol, thinking, model.output),
+    // The model's own settings are the composer's Default variant, so a set level lives here. Following the model
+    // sends none, and the model thinks as it does by default.
+    settings: level === undefined ? undefined : levelSettings(protocol, level, model.output),
     variants:
-      thinking !== undefined && protocol === "anthropic"
-        ? EFFORTS.map((effort) => ({ id: effort, settings: effortSettings(protocol, effort, model.output) }))
+      thinks && protocol === "anthropic"
+        ? LEVELS.map((item) => ({ id: item, settings: levelSettings(protocol, item, model.output) }))
         : undefined,
   }
 }
@@ -276,13 +323,23 @@ export function toConfig(providers: readonly CustomProvider[]): ConfigDocument {
 }
 
 function readThinking(protocol: Protocol, config: ModelConfig): Thinking {
-  if (protocol !== "anthropic") return config.settings?.reasoningEffort ?? "off"
+  if (protocol !== "anthropic") {
+    if (!config.capabilities.reasoning.supported) return { type: "off" }
+
+    const effort = config.settings?.reasoningEffort
+
+    return effort === undefined ? { type: "model" } : { type: "level", level: effort }
+  }
+
+  if (!config.variants?.length) return { type: "off" }
 
   const tokens = config.settings?.thinking?.budgetTokens
 
-  if (tokens === undefined) return "off"
+  if (tokens === undefined) return { type: "model" }
 
-  return EFFORTS.find((effort) => budget(effort, config.limit?.output) === tokens) ?? "medium"
+  const preset = LEVELS.find((level) => budget(level, config.limit?.output) === tokens)
+
+  return { type: "level", level: preset ?? String(tokens) }
 }
 
 const decodeDocument = Schema.decodeUnknownOption(Schema.fromJsonString(ConfigDocument))

@@ -49,8 +49,9 @@ syncs stay easy.
 
 With OpenCode's services off, users bring their own models. **Settings → Model providers** (also the "Configure model
 providers" command) adds providers with their own API: a name and ID, the API format (OpenAI Chat Completions, OpenAI
-Responses or Anthropic Messages), the base URL, the API key, and models with a thinking level (Off, Low, Medium,
-High) and optional context and output limits. "Fetch model list" asks the API's `/models` for IDs to add.
+Responses or Anthropic Messages), the base URL, the API key, and models with a thinking setting (Follow model, Off,
+Low, Medium, High or Custom) and optional context and output limits. "Fetch model list" asks the API's `/models` for
+IDs to add.
 
 - It is the `custom-providers` built-in GUI plugin, `packages/gui-plugins/src/custom-providers/`. Its main entry
   writes `<app data>/server/config/opencode/shiyou-providers.json`, a plain config document in the server's
@@ -59,9 +60,12 @@ High) and optional context and output limits. "Fetch model list" asks the API's 
 - The desktop starts the server with `OPENCODE_CONFIG` pointing at that file (`providersFile` in
   `packages/desktop/src/main/service/shiyou-server.ts`). The server loads it like any config and watches it, so a
   saved change reaches every open project in about a second, without a restart. Project config still overrides it.
-- Thinking: the chosen level is the model's own settings, which the composer's Default variant uses; thinking models
-  also offer Low, Medium and High there. OpenAI formats let the server spell the variants (`reasoningEffort`);
-  Anthropic-compatible models get budgeted `thinking` variants written by the plugin, below the output limit.
+- Thinking: Follow model, the default, sends no reasoning settings, so the model thinks as it does by default. A set
+  level (Low, Medium, High, or a Custom value: any effort the API accepts such as `minimal` or `xhigh`, or for
+  Anthropic a thinking budget in tokens) is the model's own settings, which the composer's Default variant uses.
+  Unless thinking is Off, the composer also offers Low, Medium and High, plus a custom effort. OpenAI formats let the
+  server spell the variants (`reasoningEffort`); Anthropic-compatible models get budgeted `thinking` variants written
+  by the plugin, below the output limit.
 - The user's own `OPENCODE_CONFIG` travels in `SHIYOU_USER_CONFIG` and `restoreUserConfig`
   (`packages/util/src/shiyou-user-env.ts`) hands it back right after `packages/cli/src/server-process.ts` reads it,
   so terminals and tools the server starts never load shiyou's providers.
