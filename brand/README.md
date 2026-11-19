@@ -45,6 +45,27 @@ syncs stay easy.
   (`composer/commands.tsx`), and the connect command's description that names OpenCode Go and Console
   (`SERVICE_KEYS` in `packages/app/src/brand/i18n.ts`).
 
+## Model providers page
+
+With OpenCode's services off, users bring their own models. **Settings → Model providers** (also the "Configure model
+providers" command) adds providers with their own API: a name and ID, the API format (OpenAI Chat Completions, OpenAI
+Responses or Anthropic Messages), the base URL, the API key, and models with a thinking level (Off, Low, Medium,
+High) and optional context and output limits. "Fetch model list" asks the API's `/models` for IDs to add.
+
+- It is the `custom-providers` built-in GUI plugin, `packages/gui-plugins/src/custom-providers/`. Its main entry
+  writes `<app data>/server/config/opencode/shiyou-providers.json`, a plain config document in the server's
+  `providers` format (`toConfig` in `model.ts`). The file is the only store, so API keys sit there in plain text,
+  readable only by the user (mode 0600).
+- The desktop starts the server with `OPENCODE_CONFIG` pointing at that file (`providersFile` in
+  `packages/desktop/src/main/service/shiyou-server.ts`). The server loads it like any config and watches it, so a
+  saved change reaches every open project in about a second, without a restart. Project config still overrides it.
+- Thinking: the chosen level is the model's own settings, which the composer's Default variant uses; thinking models
+  also offer Low, Medium and High there. OpenAI formats let the server spell the variants (`reasoningEffort`);
+  Anthropic-compatible models get budgeted `thinking` variants written by the plugin, below the output limit.
+- The user's own `OPENCODE_CONFIG` travels in `SHIYOU_USER_CONFIG` and `restoreUserConfig`
+  (`packages/util/src/shiyou-user-env.ts`) hands it back right after `packages/cli/src/server-process.ts` reads it,
+  so terminals and tools the server starts never load shiyou's providers.
+
 ## Identity
 
 The desktop app is `shiyou` (`com.shiyou.desktop`, with `.beta` and `.dev` channels) and registers the `shiyou://`

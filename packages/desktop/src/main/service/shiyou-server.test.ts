@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "node:path"
-import { serverEnv, serverPort, serverRoot, serviceFile } from "./shiyou-server"
+import { providersFile, serverEnv, serverPort, serverRoot, serviceFile } from "./shiyou-server"
 
 const userData = path.join("/apps", "com.shiyou.desktop")
 
@@ -26,6 +26,14 @@ describe("shiyou server", () => {
       XDG_CACHE_HOME: null,
       XDG_STATE_HOME: null,
     })
+  })
+
+  test("loads the Model providers file as the server's config, and passes the user's own value", () => {
+    const file = path.join(root, "config", "opencode", "shiyou-providers.json")
+
+    expect(providersFile(userData)).toBe(file)
+    expect(serverEnv(userData, {})).toMatchObject({ OPENCODE_CONFIG: file, SHIYOU_USER_CONFIG: "null" })
+    expect(serverEnv(userData, { OPENCODE_CONFIG: "/home/me/oc.json" }).SHIYOU_USER_CONFIG).toBe('"/home/me/oc.json"')
   })
 
   test("registers where the CLI writes under its state root", () => {

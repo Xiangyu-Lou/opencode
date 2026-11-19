@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import os from "os"
 import path from "path"
 import { pathToFileURL } from "url"
-import { restoreUserXdg } from "../src/shiyou-user-env.js"
+import { restoreUserConfig, restoreUserXdg } from "../src/shiyou-user-env.js"
 
 const module = pathToFileURL(path.join(import.meta.dir, "../src/global-roots.ts")).href
 const root = path.join(os.tmpdir(), "shiyou-server")
@@ -84,5 +84,29 @@ describe("shiyou user XDG", () => {
       XDG_STATE_HOME: "",
       SHIYOU_USER_XDG: "",
     })
+  })
+})
+
+describe("shiyou user OPENCODE_CONFIG", () => {
+  const providers = path.join(root, "config", "opencode", "shiyou-providers.json")
+
+  test("gives back the user's value", () => {
+    const env = { OPENCODE_CONFIG: providers, SHIYOU_USER_CONFIG: JSON.stringify("/home/me/oc.json") }
+    restoreUserConfig(env)
+    expect(env).toEqual({ OPENCODE_CONFIG: "/home/me/oc.json", SHIYOU_USER_CONFIG: "" })
+  })
+
+  test("empties the providers file when the user had none, or the value is unreadable", () => {
+    for (const saved of ["null", "{", "42"]) {
+      const env = { OPENCODE_CONFIG: providers, SHIYOU_USER_CONFIG: saved }
+      restoreUserConfig(env)
+      expect(env).toEqual({ OPENCODE_CONFIG: "", SHIYOU_USER_CONFIG: "" })
+    }
+  })
+
+  test("leaves a process the desktop did not start alone", () => {
+    const env = { OPENCODE_CONFIG: "/home/me/oc.json" }
+    restoreUserConfig(env)
+    expect(env).toEqual({ OPENCODE_CONFIG: "/home/me/oc.json" })
   })
 })

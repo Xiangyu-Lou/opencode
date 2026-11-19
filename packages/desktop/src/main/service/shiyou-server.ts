@@ -20,6 +20,9 @@ const ROOTS = [
 // Keep in sync with packages/util/src/shiyou-user-env.ts.
 const USER_XDG = "SHIYOU_USER_XDG"
 
+// The user's own OPENCODE_CONFIG, given back the same way once the server has read its providers file.
+const USER_CONFIG = "SHIYOU_USER_CONFIG"
+
 // Below 0x8000, which Windows hands out and reserves in blocks, and apart from OpenCode's 0xC0DE and 0xC0DF
 // (0x70DE and 0x70DF on Windows). Each channel runs its own server, so each has its own port.
 const PORTS = new Map([
@@ -33,13 +36,26 @@ export function serverRoot(userData: string) {
   return path.join(userData, "server")
 }
 
-/** The variables the server starts with: its own XDG roots, and the user's values to hand back. */
+/**
+ * The config file the Model providers settings page writes (the `custom-providers` built-in plugin). The server loads it
+ * as its OPENCODE_CONFIG and watches it. Keep in sync with packages/gui-plugins/src/custom-providers/main.ts.
+ */
+export function providersFile(userData: string) {
+  return path.join(serverRoot(userData), "config", "opencode", "shiyou-providers.json")
+}
+
+/**
+ * The variables the server starts with: its own XDG roots, the providers file as its OPENCODE_CONFIG, and the user's
+ * values to hand back.
+ */
 export function serverEnv(userData: string, env: Readonly<Record<string, string | undefined>> = process.env) {
   const root = serverRoot(userData)
 
   return {
     ...Object.fromEntries(ROOTS.map(([key, folder]) => [key, path.join(root, folder)])),
     [USER_XDG]: JSON.stringify(Object.fromEntries(ROOTS.map(([key]) => [key, env[key] ?? null]))),
+    OPENCODE_CONFIG: providersFile(userData),
+    [USER_CONFIG]: JSON.stringify(env.OPENCODE_CONFIG ?? null),
   }
 }
 

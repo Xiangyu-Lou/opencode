@@ -6,6 +6,7 @@ import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Global } from "@opencode/util/global"
 import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_VERSION } from "./version"
 import { AppProcess } from "@opencode/util/process"
+import { restoreUserConfig } from "@opencode/util/shiyou-user-env"
 import { randomBytes, randomUUID } from "node:crypto"
 import { Effect, Option, Redacted, Schema } from "effect"
 import { PersistentPty } from "@opencode/schema/persistent-pty"
@@ -161,6 +162,8 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
         transform,
         () => remote.urls,
       )
+      // shiyou: OPENCODE_CONFIG is read above; what this process starts gets the user's own value back.
+      restoreUserConfig()
       const server = yield* launch.pipe(
         Effect.catch((error) => {
           if (findIncumbent === undefined || !addressInUse(error)) return Effect.fail(error)

@@ -13,6 +13,7 @@ import wsl from "./wsl"
 import microsoftOffice from "./microsoft-office"
 import sources from "./sources"
 import goal from "./goal"
+import customProviders from "./custom-providers"
 
 /** Built-in plugins with their main entries, by id. Lists every built-in so their ids stay reserved. */
 export const builtins = compose({
@@ -31,4 +32,6 @@ export const builtins = compose({
   "microsoft-office": microsoftOffice,
   sources,
   goal,
+  // shiyou: saves the providers of the Model providers page where the bundled server reads them.
+  "custom-providers": { ...customProviders, mainEntry: () => import("./custom-providers/main") },
 })

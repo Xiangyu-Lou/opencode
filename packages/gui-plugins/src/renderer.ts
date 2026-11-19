@@ -27,6 +27,8 @@ import sources from "./sources"
 import sourcesRenderer from "./sources/renderer"
 import goal from "./goal"
 import goalRenderer from "./goal/renderer"
+import customProviders from "./custom-providers"
+import customProvidersRenderer from "./custom-providers/renderer"
 
 // The window renders once every built-in is active, so the small renderer entries load with the app, like the
 // features they replaced. Heavy UI stays behind `lazy()` inside them.
@@ -50,4 +52,6 @@ export const builtins = compose({
   "microsoft-office": { ...microsoftOffice, windowEntry: eager(microsoftOfficeRenderer) },
   sources: { ...sources, windowEntry: eager(sourcesRenderer) },
   goal: { ...goal, windowEntry: eager(goalRenderer) },
+  // shiyou: the Model providers settings page, where the user adds their own API, key and models.
+  "custom-providers": { ...customProviders, windowEntry: eager(customProvidersRenderer) },
 })

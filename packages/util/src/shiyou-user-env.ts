@@ -39,3 +39,27 @@ function parse(text: string) {
     return undefined
   }
 }
+
+const USER_CONFIG = "SHIYOU_USER_CONFIG"
+
+/**
+ * shiyou: the desktop also points OPENCODE_CONFIG at the providers file its Model providers settings page writes, and
+ * passes the user's own value in SHIYOU_USER_CONFIG (JSON, null for unset). The server reads OPENCODE_CONFIG when it
+ * starts, after the XDG roots, so it calls this once it has: the terminals and tools it starts then see the user's
+ * value, or an empty one, which OpenCode reads as unset.
+ */
+export function restoreUserConfig(env: Record<string, string | undefined> = process.env) {
+  const saved = env[USER_CONFIG]
+
+  if (!saved) return
+  env[USER_CONFIG] = ""
+  const value = (() => {
+    try {
+      return JSON.parse(saved)
+    } catch {
+      return undefined
+    }
+  })()
+
+  env.OPENCODE_CONFIG = typeof value === "string" ? value : ""
+}
