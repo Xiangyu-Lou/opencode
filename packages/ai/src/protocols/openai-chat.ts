@@ -32,6 +32,7 @@ import * as Cache from "./utils/cache.js"
 import { resolveParallelToolCalls } from "./open-responses.js"
 import { OpenResponsesOptions } from "./utils/open-responses-options.js"
 import { Lifecycle } from "./utils/lifecycle.js"
+import { DSML } from "./utils/dsml.js"
 import { ToolStream } from "./utils/tool-stream.js"
 import { OpenAIFreeform } from "./openai-freeform.js"
 
@@ -372,6 +373,8 @@ export interface ParserState {
   readonly latestToolIndex?: number
   readonly nextToolIndex: number
   readonly requireFinishReason: boolean
+  /** shiyou: DeepSeek tool-call markup the provider left in reasoning or text. */
+  readonly dsml: { readonly reasoning: DSML.Channel; readonly text: DSML.Channel }
 }
 
 // =============================================================================
@@ -1147,7 +1150,10 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
     const text = detailDelta?.length
       ? (detailText(detailDelta, reasoningTextObserved) ?? reasoning?.text)
       : reasoning?.text
-    if (text !== undefined) lifecycle = Lifecycle.reasoningDelta(lifecycle, events, "reasoning-0", text, deltaMetadata)
+    const [dsmlReasoning, shownReasoning] =
+      text === undefined ? [state.dsml.reasoning, undefined] : DSML.push(state.dsml.reasoning, text)
+    if (shownReasoning)
+      lifecycle = Lifecycle.reasoningDelta(lifecycle, events, "reasoning-0", shownReasoning, deltaMetadata)
     else if (
       reasoningDetailsObserved &&
       !lifecycle.reasoning.has("reasoning-0") &&
@@ -1159,7 +1165,8 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
     // Reasoning is one response-wide channel: it stays open alongside text and
     // refusal output so late reasoning deltas and details join the same block,
     // and `finishEvents` closes it once with the complete metadata.
-    if (delta?.content) lifecycle = Lifecycle.textDelta(lifecycle, events, "text-0", delta.content)
+    const [dsmlText, shownText] = delta?.content ? DSML.push(state.dsml.text, delta.content) : [state.dsml.text, ""]
+    if (shownText) lifecycle = Lifecycle.textDelta(lifecycle, events, "text-0", shownText)
 
     if (delta?.refusal) lifecycle = Lifecycle.textDelta(lifecycle, events, "text-0", delta.refusal)
 
@@ -1266,6 +1273,7 @@ const step = (state: ParserState, event: OpenAIChatEvent) =>
         latestToolIndex,
         nextToolIndex,
         requireFinishReason: state.requireFinishReason,
+        dsml: { reasoning: dsmlReasoning, text: dsmlText },
       },
       events,
     ] as const
@@ -1300,6 +1308,23 @@ export const finishEvents = Effect.fnUntraced(function* (state: ParserState) {
           state.finishReason.normalized === "stop" && hasToolCalls ? "tool-calls" : state.finishReason.normalized,
       }
     : { normalized: hasToolCalls ? ("tool-calls" as const) : ("stop" as const) }
+  const [reasoningMarkup, reasoningTail] = DSML.flush(state.dsml.reasoning)
+  const [textMarkup, textTail] = DSML.flush(state.dsml.text)
+  // shiyou: the model wrote a tool call that the provider did not turn into one. Ending with `stop` would end the turn
+  // there, so fail the reply as incomplete and let the session continue it.
+  if (
+    (reasoningMarkup.seen || textMarkup.seen) &&
+    !hasToolCalls &&
+    reason.normalized !== "length" &&
+    reason.normalized !== "content-filter"
+  )
+    return yield* new AIError({
+      reason: new InvalidProviderOutputError({
+        message: "The model wrote a tool call as text (DeepSeek DSML) that the provider did not turn into a tool call",
+        classification: "incomplete-stream",
+        route: ADAPTER,
+      }),
+    })
   // Snapshot details at publish time so the emitted event never observes later
   // mutation of the accumulated `reasoningDetails` array.
   const metadata = reasoningMetadata(
@@ -1307,17 +1332,17 @@ export const finishEvents = Effect.fnUntraced(function* (state: ParserState) {
     state.reasoningField,
     state.reasoningDetailsObserved ? [...state.reasoningDetails] : undefined,
   )
+  const deltaMetadata = reasoningMetadata(state.providerMetadataKey, state.reasoningField)
   const started =
     state.reasoningDetailsObserved && !state.reasoningEmitted
-      ? Lifecycle.reasoningStart(
-          state.lifecycle,
-          events,
-          "reasoning-0",
-          reasoningMetadata(state.providerMetadataKey, state.reasoningField),
-        )
+      ? Lifecycle.reasoningStart(state.lifecycle, events, "reasoning-0", deltaMetadata)
       : state.lifecycle
-  const ended = Lifecycle.reasoningEnd(started, events, "reasoning-0", metadata)
-  const lifecycle = toolCallEvents.length ? Lifecycle.stepStart(ended, events) : ended
+  const reasoned = reasoningTail
+    ? Lifecycle.reasoningDelta(started, events, "reasoning-0", reasoningTail, deltaMetadata)
+    : started
+  const ended = Lifecycle.reasoningEnd(reasoned, events, "reasoning-0", metadata)
+  const texted = textTail ? Lifecycle.textDelta(ended, events, "text-0", textTail) : ended
+  const lifecycle = toolCallEvents.length ? Lifecycle.stepStart(texted, events) : texted
   events.push(...toolCallEvents)
   Lifecycle.finish(lifecycle, events, { reason, usage: state.usage })
   return events
@@ -1355,6 +1380,7 @@ export const protocol = Protocol.make({
       reasoningEmitted: false,
       nextToolIndex: 0,
       requireFinishReason: request.model.compatibility?.requireFinishReason ?? true,
+      dsml: { reasoning: DSML.empty, text: DSML.empty },
     }),
     step: (state: ParserState, event) => (event === DONE ? Effect.succeed([state, []] as const) : step(state, event)),
     terminal: (event) => event === DONE,
